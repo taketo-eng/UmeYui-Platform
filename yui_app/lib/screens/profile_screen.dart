@@ -577,103 +577,119 @@ class _ActionButtons extends StatelessWidget {
     final newEmailCtrl = TextEditingController();
     final newEmailConfirmCtrl = TextEditingController();
 
-    await showDialog(
+    await showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) {
           bool loading = false;
-          return AlertDialog(
-            insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            title: const Text('確認コードと新しいメアドを入力'),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '$emailHint に送信された6桁のコードを入力してください。',
-                    style: const TextStyle(fontSize: 13, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: codeCtrl,
-                    keyboardType: TextInputType.number,
-                    maxLength: 6,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 24, letterSpacing: 8),
-                    decoration: const InputDecoration(
-                      hintText: '000000',
-                      border: OutlineInputBorder(),
-                      counterText: '',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: newEmailCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: '新しいメールアドレス',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: newEmailConfirmCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: '新しいメールアドレス（確認）',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ],
-              ),
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 24,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('キャンセル'),
-              ),
-              FilledButton(
-                onPressed: loading
-                    ? null
-                    : () async {
-                        if (newEmailCtrl.text.trim() != newEmailConfirmCtrl.text.trim()) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(
-                            const SnackBar(content: Text('メールアドレスが一致しません'), backgroundColor: Colors.red),
-                          );
-                          return;
-                        }
-                        setState(() => loading = true);
-                        try {
-                          await apiClient.verifyEmailChange(
-                            codeCtrl.text.trim(),
-                            newEmailCtrl.text.trim(),
-                          );
-                          if (ctx.mounted) {
-                            Navigator.pop(ctx);
-                            // メアド変更後はセッションが無効になるのでログアウト
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('メールアドレスを変更しました。再ログインしてください。'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                            await context.read<AuthProvider>().logout();
-                          }
-                        } on ApiException catch (e) {
-                          setState(() => loading = false);
-                          if (ctx.mounted) {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-                            );
-                          }
-                        }
-                      },
-                child: loading
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('変更する'),
-              ),
-            ],
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  '確認コードと新しいメアドを入力',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '$emailHint に送信された6桁のコードを入力してください。',
+                  style: const TextStyle(fontSize: 13, color: Colors.grey),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: codeCtrl,
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 24, letterSpacing: 8),
+                  decoration: const InputDecoration(
+                    hintText: '000000',
+                    border: OutlineInputBorder(),
+                    counterText: '',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: newEmailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: '新しいメールアドレス',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: newEmailConfirmCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: '新しいメールアドレス（確認）',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('キャンセル'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: loading
+                          ? null
+                          : () async {
+                              if (newEmailCtrl.text.trim() != newEmailConfirmCtrl.text.trim()) {
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                  const SnackBar(content: Text('メールアドレスが一致しません'), backgroundColor: Colors.red),
+                                );
+                                return;
+                              }
+                              setState(() => loading = true);
+                              try {
+                                await apiClient.verifyEmailChange(
+                                  codeCtrl.text.trim(),
+                                  newEmailCtrl.text.trim(),
+                                );
+                                if (ctx.mounted) {
+                                  Navigator.pop(ctx);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('メールアドレスを変更しました。再ログインしてください。'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                  await context.read<AuthProvider>().logout();
+                                }
+                              } on ApiException catch (e) {
+                                setState(() => loading = false);
+                                if (ctx.mounted) {
+                                  ScaffoldMessenger.of(ctx).showSnackBar(
+                                    SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+                                  );
+                                }
+                              }
+                            },
+                      child: loading
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('変更する'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           );
         },
       ),
