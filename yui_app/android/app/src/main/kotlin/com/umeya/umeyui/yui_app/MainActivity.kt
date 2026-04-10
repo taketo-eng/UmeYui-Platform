@@ -1,4 +1,4 @@
-package com.umeya.umeyui.yui_app
+package com.umeyui
 
 import io.flutter.embedding.android.FlutterActivity
 

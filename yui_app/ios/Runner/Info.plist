@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>yui_app</string>
+	<string>UmeYui</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -24,8 +24,21 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+		<string>http</string>
+		<string>instagram</string>
+		<string>twitter</string>
+		<string>line</string>
+		<string>fb</string>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>プロフィールアイコンの撮影に使用します。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>プロフィールアイコンに使用する画像を選択するために、フォトライブラリへのアクセスが必要です。</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -66,18 +79,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>LSApplicationQueriesSchemes</key>
-	<array>
-		<string>https</string>
-		<string>http</string>
-		<string>instagram</string>
-		<string>twitter</string>
-		<string>line</string>
-		<string>fb</string>
-	</array>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>プロフィールアイコンに使用する画像を選択するために、フォトライブラリへのアクセスが必要です。</string>
-	<key>NSCameraUsageDescription</key>
-	<string>プロフィールアイコンの撮影に使用します。</string>
 </dict>
 </plist>
