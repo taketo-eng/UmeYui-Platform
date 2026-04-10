@@ -1,0 +1,123 @@
+# UmeYui — 古民家梅屋 予約・交流プラットフォーム
+
+古民家梅屋のチャレンジショップ向けの招待制コミュニティアプリ。  
+「一人じゃないから、はじめられる」をコンセプトに、出店者同士が集まって開催日を確定させる条件付き予約システムを実装しています。
+
+---
+
+## 機能概要
+
+### 1. 最低開催枠数システム
+
+「〇人集まれば出店する」という条件付き予約。目標人数に達した時点で開催確定となり、参加者全員に通知が届きます。
+
+### 2. 参加申請フロー
+
+発起人が枠を作成し、他の出店者が参加申請を送る申請制。発起人が承認・却下を管理します。
+
+### 3. 相乗りチャット
+
+開催確定した枠ごとに専用チャットルームを自動生成。確定参加者のみがアクセスできます。
+
+### 4. 管理者機能
+
+招待制アカウント発行・有効/無効切り替え・パスワードリセット・メールアドレス変更（復旧用）。
+
+---
+
+## 技術スタック
+
+| レイヤー        | 技術                                        |
+| --------------- | ------------------------------------------- |
+| モバイルアプリ  | Flutter（iOS / Android）                    |
+| バックエンドAPI | Cloudflare Workers + Hono                   |
+| データベース    | Cloudflare D1（SQLite互換）                 |
+| ストレージ      | Cloudflare R2（アバター画像）               |
+| 認証            | JWT（PBKDF2ハッシュ + token_version無効化） |
+
+---
+
+## アーキテクチャ
+
+```
+┌─────────────────┐        HTTPS        ┌──────────────────────────┐
+│  Flutter App    │ ──────────────────▶ │  Cloudflare Workers      │
+│  (iOS/Android)  │                     │  (Hono / TypeScript)     │
+└─────────────────┘                     └──────────┬───────────────┘
+                                                   │
+                                    ┌──────────────┼──────────────┐
+                                    ▼              ▼              ▼
+                              ┌──────────┐  ┌──────────┐  ┌──────────┐
+                              │    D1    │  │    R2    │  │ Secrets  │
+                              │  (DB)    │  │ (Images) │  │  (JWT)   │
+                              └──────────┘  └──────────┘  └──────────┘
+```
+
+---
+
+## プロジェクト構成
+
+```
+.
+├── yui_app/          # Flutter アプリ
+│   └── lib/
+│       ├── core/     # API通信・認証・ルーティング
+│       ├── models/   # データモデル
+│       └── screens/  # 各画面
+└── yui-api/          # Cloudflare Workers API
+    ├── src/
+    │   ├── routes/   # エンドポイント
+    │   └── lib/      # 認証・共通処理
+    └── migrations/   # D1マイグレーション
+```
+
+---
+
+## セキュリティ
+
+- パスワード: PBKDF2（100,000イテレーション）でハッシュ化
+- JWT: token_version によるログアウト時の即時無効化
+- レート制限: ログイン試行をIP別に制限（10回/15分）
+- 権限制御: admin / vendor ロールによるエンドポイントアクセス制御
+- SQLインジェクション: prepared statement で対策済み
+
+---
+
+## セットアップ
+
+### 必要なもの
+
+- Flutter SDK
+- Node.js 18+
+- Cloudflare アカウント（Workers / D1 / R2）
+
+### API（`yui-api/`）
+
+```bash
+npm install
+
+# wrangler.jsonc を作成（D1のdatabase_idを設定）
+cp wrangler.jsonc.example wrangler.jsonc
+
+# JWT_SECRETを登録
+npx wrangler secret put JWT_SECRET
+
+# マイグレーション
+npx wrangler d1 migrations apply <DB_NAME> --remote
+
+# デプロイ
+npx wrangler deploy
+```
+
+### Flutter アプリ（`yui_app/`）
+
+```bash
+flutter pub get
+
+# api_client.dart の _baseUrl をデプロイ先URLに変更してから実行
+flutter run
+```
+
+---
+
+© 2026 Taketo Yahiro. All rights reserved.

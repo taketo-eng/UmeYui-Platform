@@ -1,0 +1,5 @@
+ALTER TABLE users ADD COLUMN website_url TEXT;
+ALTER TABLE users ADD COLUMN instagram_url TEXT;
+ALTER TABLE users ADD COLUMN x_url TEXT;
+ALTER TABLE users ADD COLUMN line_url TEXT;
+ALTER TABLE users ADD COLUMN facebook_url TEXT;

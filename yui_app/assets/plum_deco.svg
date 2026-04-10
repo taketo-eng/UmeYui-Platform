@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" fill="none">
+  <!-- Plum blossom decorative background pattern for login screen -->
+  <!-- Large blossom top-right -->
+  <g opacity="0.18" fill="white">
+    <ellipse cx="320" cy="55" rx="22" ry="32" transform="rotate(0 320 80)"/>
+    <ellipse cx="320" cy="55" rx="22" ry="32" transform="rotate(72 320 80)"/>
+    <ellipse cx="320" cy="55" rx="22" ry="32" transform="rotate(144 320 80)"/>
+    <ellipse cx="320" cy="55" rx="22" ry="32" transform="rotate(216 320 80)"/>
+    <ellipse cx="320" cy="55" rx="22" ry="32" transform="rotate(288 320 80)"/>
+    <circle cx="320" cy="80" r="12"/>
+  </g>
+  <!-- Medium blossom bottom-left -->
+  <g opacity="0.12" fill="white">
+    <ellipse cx="55" cy="320" rx="16" ry="24" transform="rotate(0 55 345)"/>
+    <ellipse cx="55" cy="320" rx="16" ry="24" transform="rotate(72 55 345)"/>
+    <ellipse cx="55" cy="320" rx="16" ry="24" transform="rotate(144 55 345)"/>
+    <ellipse cx="55" cy="320" rx="16" ry="24" transform="rotate(216 55 345)"/>
+    <ellipse cx="55" cy="320" rx="16" ry="24" transform="rotate(288 55 345)"/>
+    <circle cx="55" cy="345" r="9"/>
+  </g>
+  <!-- Small blossom top-left -->
+  <g opacity="0.10" fill="white">
+    <ellipse cx="60" cy="50" rx="11" ry="17" transform="rotate(0 60 65)"/>
+    <ellipse cx="60" cy="50" rx="11" ry="17" transform="rotate(72 60 65)"/>
+    <ellipse cx="60" cy="50" rx="11" ry="17" transform="rotate(144 60 65)"/>
+    <ellipse cx="60" cy="50" rx="11" ry="17" transform="rotate(216 60 65)"/>
+    <ellipse cx="60" cy="50" rx="11" ry="17" transform="rotate(288 60 65)"/>
+    <circle cx="60" cy="65" r="7"/>
+  </g>
+  <!-- Tiny blossom center-right -->
+  <g opacity="0.08" fill="white">
+    <ellipse cx="370" cy="190" rx="8" ry="12" transform="rotate(0 370 200)"/>
+    <ellipse cx="370" cy="190" rx="8" ry="12" transform="rotate(72 370 200)"/>
+    <ellipse cx="370" cy="190" rx="8" ry="12" transform="rotate(144 370 200)"/>
+    <ellipse cx="370" cy="190" rx="8" ry="12" transform="rotate(216 370 200)"/>
+    <ellipse cx="370" cy="190" rx="8" ry="12" transform="rotate(288 370 200)"/>
+    <circle cx="370" cy="200" r="5"/>
+  </g>
+  <!-- Branch lines -->
+  <g opacity="0.15" stroke="white" stroke-width="2" stroke-linecap="round">
+    <path d="M 280 20 Q 310 50 320 80"/>
+    <path d="M 320 80 Q 350 70 370 90"/>
+    <path d="M 20 300 Q 40 320 55 345"/>
+    <path d="M 55 345 Q 30 360 20 380"/>
+  </g>
+</svg>
