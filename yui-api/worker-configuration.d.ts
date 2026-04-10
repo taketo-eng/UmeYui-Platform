@@ -9,6 +9,7 @@ declare namespace Cloudflare {
 		umeyui_db: D1Database;
 		JWT_SECRET: string;
 		AVATAR_BUCKET: R2Bucket;
+		RESEND_API_KEY: string;
 	}
 }
 interface Env extends Cloudflare.Env {}

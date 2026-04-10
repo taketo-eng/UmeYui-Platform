@@ -111,12 +111,7 @@ reservationRoutes.post('/:id/reservations', async (c) => {
 			.bind(slotId)
 			.first<{ date: string }>();
 
-		// 全出店者にプッシュ通知 + アプリ内通知
-		await sendPushToAll(c.env.umeyui_db, {
-			title: '出店者募集開始！',
-			body: `${slotInfo?.date ?? ''}の枠で出店者の募集が始まりました。最低${min_vendors}人集まれば開催確定です。`,
-			slotId,
-		});
+		// 全出店者にアプリ内通知
 		await createNotificationsForAllVendors(
 			c.env.umeyui_db,
 			authUser.sub,

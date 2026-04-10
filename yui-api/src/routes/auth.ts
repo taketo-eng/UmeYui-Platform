@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { verifyPassword, createJwt, getAuthUser, hashPassword } from '../lib/auth';
+import { sendPasswordChangeCode, sendEmailChangeCode } from '../lib/email';
 
 export const authRoutes = new Hono<{ Bindings: Env }>();
 
@@ -145,8 +146,7 @@ authRoutes.post('/change-password', async (c) => {
 		.bind(tokenId, authUser.sub, code, newHash, expiresAt)
 		.run();
 
-	// TODO: メール送信（Resend等のサービスを導入後に実装）
-	console.log(`[Email] パスワード変更確認コード → ${user.email}: ${code}`);
+	await sendPasswordChangeCode(c.env.RESEND_API_KEY, user.email, code);
 
 	// メールアドレスを一部マスクして返す（フロントで表示用）
 	const [localPart, domain] = user.email.split('@');
@@ -188,8 +188,7 @@ authRoutes.post('/change-email', async (c) => {
 		.bind(tokenId, authUser.sub, code, expiresAt)
 		.run();
 
-	// TODO: メール送信（Resend等の導入後に実装）
-	console.log(`[Email] メールアドレス変更確認コード → ${user.email}: ${code}`);
+	await sendEmailChangeCode(c.env.RESEND_API_KEY, user.email, code);
 
 	const [localPart, domain] = user.email.split('@');
 	const maskedEmail = `${localPart.slice(0, 2)}****@${domain}`;
