@@ -15,6 +15,10 @@ docs/
 .dev.vars.*
 !.dev.vars.example
 
+# Firebase設定（機密情報を含む）
+**/google-services.json
+**/GoogleService-Info.plist
+
 # Wrangler ローカル状態
 .wrangler/
 
