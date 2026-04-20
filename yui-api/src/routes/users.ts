@@ -127,7 +127,7 @@ userRoutes.patch('/:id/active', async (c) => {
 });
 
 // PATCH /users/:id/push-token
-// 本人のみ: プッシュ通知トークンを登録・更新
+// 本人のみ: デバイスのFCMトークンを登録・更新（複数デバイス対応）
 userRoutes.patch('/:id/push-token', async (c) => {
 	const authUser = await requireAuth(c);
 	if (!authUser) return c.res;
@@ -143,7 +143,14 @@ userRoutes.patch('/:id/push-token', async (c) => {
 		return c.json({ error: 'push_token は必須です' }, 400);
 	}
 
-	await c.env.umeyui_db.prepare('UPDATE users SET push_token = ? WHERE id = ?').bind(push_token, id).run();
+	await c.env.umeyui_db
+		.prepare(
+			`INSERT INTO fcm_tokens (id, user_id, token, updated_at)
+       VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(token) DO UPDATE SET user_id = ?, updated_at = CURRENT_TIMESTAMP`,
+		)
+		.bind(crypto.randomUUID(), id, push_token, id)
+		.run();
 
 	return c.json({ message: 'プッシュトークンを更新しました' });
 });
@@ -163,23 +170,14 @@ userRoutes.patch('/:id/email', async (c) => {
 		return c.json({ error: 'メールアドレスの形式が正しくありません' }, 400);
 	}
 
-	const user = await c.env.umeyui_db
-		.prepare('SELECT id FROM users WHERE id = ? AND role = ?')
-		.bind(id, 'vendor')
-		.first();
+	const user = await c.env.umeyui_db.prepare('SELECT id FROM users WHERE id = ? AND role = ?').bind(id, 'vendor').first();
 	if (!user) return c.json({ error: '出店者が見つかりません' }, 404);
 
-	const existing = await c.env.umeyui_db
-		.prepare('SELECT id FROM users WHERE email = ? AND id != ?')
-		.bind(new_email, id)
-		.first();
+	const existing = await c.env.umeyui_db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').bind(new_email, id).first();
 	if (existing) return c.json({ error: 'このメールアドレスはすでに使用されています' }, 409);
 
 	// token_versionインクリメントで既存セッションを無効化
-	await c.env.umeyui_db
-		.prepare('UPDATE users SET email = ?, token_version = token_version + 1 WHERE id = ?')
-		.bind(new_email, id)
-		.run();
+	await c.env.umeyui_db.prepare('UPDATE users SET email = ?, token_version = token_version + 1 WHERE id = ?').bind(new_email, id).run();
 
 	return c.json({ message: 'メールアドレスを変更しました' });
 });
@@ -197,10 +195,7 @@ userRoutes.patch('/:id/reset-password', async (c) => {
 		return c.json({ error: 'パスワードは8文字以上にしてください' }, 400);
 	}
 
-	const user = await c.env.umeyui_db
-		.prepare('SELECT id FROM users WHERE id = ? AND role = ?')
-		.bind(id, 'vendor')
-		.first();
+	const user = await c.env.umeyui_db.prepare('SELECT id FROM users WHERE id = ? AND role = ?').bind(id, 'vendor').first();
 
 	if (!user) {
 		return c.json({ error: '出店者が見つかりません' }, 404);
@@ -257,10 +252,7 @@ userRoutes.post('/:id/avatar', async (c) => {
 
 	const avatarUrl = `/avatars/${id}.${ext}`;
 
-	await c.env.umeyui_db
-		.prepare('UPDATE users SET avatar_url = ? WHERE id = ?')
-		.bind(avatarUrl, id)
-		.run();
+	await c.env.umeyui_db.prepare('UPDATE users SET avatar_url = ? WHERE id = ?').bind(avatarUrl, id).run();
 
 	return c.json({ avatar_url: avatarUrl });
 });
@@ -289,10 +281,7 @@ userRoutes.delete('/:id', async (c) => {
 	for (const res of activeReservations) {
 		if (res.is_initiator === 1) {
 			// 発起人の場合: 枠全体をキャンセルして open に戻す
-			const chatRoom = await db
-				.prepare('SELECT id FROM chat_rooms WHERE slot_id = ?')
-				.bind(res.slot_id)
-				.first<{ id: string }>();
+			const chatRoom = await db.prepare('SELECT id FROM chat_rooms WHERE slot_id = ?').bind(res.slot_id).first<{ id: string }>();
 
 			const batchOps: D1PreparedStatement[] = [
 				db.prepare("UPDATE reservations SET status = 'cancelled' WHERE slot_id = ? AND status != 'cancelled'").bind(res.slot_id),
@@ -321,10 +310,7 @@ userRoutes.delete('/:id', async (c) => {
 
 			if (remaining === 0) {
 				// 全員いなくなった → open に戻す
-				const chatRoom = await db
-					.prepare('SELECT id FROM chat_rooms WHERE slot_id = ?')
-					.bind(res.slot_id)
-					.first<{ id: string }>();
+				const chatRoom = await db.prepare('SELECT id FROM chat_rooms WHERE slot_id = ?').bind(res.slot_id).first<{ id: string }>();
 				const ops: D1PreparedStatement[] = [
 					db.prepare("UPDATE slots SET status = 'open', min_vendors = NULL, max_vendors = NULL WHERE id = ?").bind(res.slot_id),
 				];
@@ -336,10 +322,7 @@ userRoutes.delete('/:id', async (c) => {
 			} else if (slot && slot.min_vendors !== null && remaining < slot.min_vendors) {
 				// min を下回った → recruiting に戻す
 				if (slot.status === 'confirmed') {
-					const chatRoom = await db
-						.prepare('SELECT id FROM chat_rooms WHERE slot_id = ?')
-						.bind(res.slot_id)
-						.first<{ id: string }>();
+					const chatRoom = await db.prepare('SELECT id FROM chat_rooms WHERE slot_id = ?').bind(res.slot_id).first<{ id: string }>();
 					if (chatRoom) {
 						await db.batch([
 							db.prepare('DELETE FROM messages WHERE room_id = ?').bind(chatRoom.id),

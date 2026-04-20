@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import '../models/user.dart';
 import 'api_client.dart';
 
@@ -38,6 +39,7 @@ class AuthProvider extends ChangeNotifier {
       final json = await apiClient.getMe(userId);
       _user = User.fromJson(json);
       _status = AuthStatus.authenticated;
+      await _setupPushToken(userId);
     } catch (_) {
       // トークンが無効・期限切れの場合はログアウト状態に
       await apiClient.deleteToken();
@@ -55,6 +57,7 @@ class AuthProvider extends ChangeNotifier {
       _user = User.fromJson(data['user'] as Map<String, dynamic>);
       _status = AuthStatus.authenticated;
       notifyListeners();
+      await _setupPushToken(_user!.id);
       return true;
     } on ApiException catch (e) {
       _errorMessage = e.message;
@@ -77,6 +80,22 @@ class AuthProvider extends ChangeNotifier {
     final json = await apiClient.getMe(_user!.id);
     _user = User.fromJson(json);
     notifyListeners();
+  }
+
+  Future<void> _setupPushToken(String userId) async {
+    try {
+      final messaging = FirebaseMessaging.instance;
+      await messaging.requestPermission();
+      final fcmToken = await messaging.getToken();
+      if (fcmToken != null) {
+        await apiClient.registerPushToken(userId, fcmToken);
+      }
+      messaging.onTokenRefresh.listen((newToken) {
+        apiClient.registerPushToken(userId, newToken);
+      });
+    } catch (_) {
+      // 通知許可が拒否された場合などは無視して続行
+    }
   }
 
   // JWTトークンのペイロード部分からuser_idを取り出す

@@ -655,9 +655,13 @@ class _SlotCard extends StatelessWidget {
             if (!auth.isAdmin && !isJoined && (slot.isOpen || slot.isRecruiting))
               _ReserveButton(slot: slot, onReserved: onReserved),
 
-            // キャンセルボタン（参加中・募集中のみ）
-            if (!auth.isAdmin && isJoined && slot.isRecruiting)
-              _CancelButton(slot: slot, onCancelled: onReserved),
+            // キャンセルボタン（参加中・募集中または開催確定）
+            if (!auth.isAdmin && isJoined && (slot.isRecruiting || slot.isConfirmed))
+              _CancelButton(
+                slot: slot,
+                onCancelled: onReserved,
+                isInitiator: slot.vendors.any((v) => v.userId == myUserId && v.isInitiator),
+              ),
           ],
           ),
           ),
@@ -910,7 +914,8 @@ class _ProgressBar extends StatelessWidget {
 class _CancelButton extends StatefulWidget {
   final Slot slot;
   final VoidCallback onCancelled;
-  const _CancelButton({required this.slot, required this.onCancelled});
+  final bool isInitiator;
+  const _CancelButton({required this.slot, required this.onCancelled, required this.isInitiator});
 
   @override
   State<_CancelButton> createState() => _CancelButtonState();
@@ -925,8 +930,9 @@ class _CancelButtonState extends State<_CancelButton> {
       builder: (ctx) => AlertDialog(
         title: const Text('出店をキャンセル'),
         content: Text(
-          '${widget.slot.date} の出店参加をキャンセルしますか？\n\n'
-          '※ キャンセル後、参加者が最低人数を下回った場合は募集中に戻ります。',
+          widget.isInitiator
+              ? '${widget.slot.date} の出店をキャンセルしますか？\n\n発起人がキャンセルすると、他の参加者に開催中止の通知が届きます。'
+              : '${widget.slot.date} の出店参加をキャンセルしますか？\n\n※ キャンセル後、参加者が最低人数を下回った場合は募集中に戻ります。',
         ),
         actions: [
           TextButton(

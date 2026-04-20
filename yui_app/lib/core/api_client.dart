@@ -6,7 +6,7 @@ import 'package:http_parser/http_parser.dart';
 
 // APIのベースURL
 // 本番デプロイ時は実際のWorkers URLに変更してください
-const _baseUrl = 'http://localhost:8787';
+const _baseUrl = 'https://yui-api.yahiro-t-eng.workers.dev';
 
 // トークンを保存するためのキー
 const _tokenKey = 'jwt_token';
@@ -318,6 +318,10 @@ class ApiClient {
       if (responseMessage != null && responseMessage.isNotEmpty)
         'response_message': responseMessage,
     });
+  }
+
+  Future<void> registerPushToken(String userId, String token) async {
+    await patch('/users/$userId/push-token', {'push_token': token});
   }
 
   // ---- 通知API ----

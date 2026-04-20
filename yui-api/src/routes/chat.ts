@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { requireAuth } from '../lib/middleware';
+import { sendPushToUser } from '../lib/fcm';
 
 export const chatRoutes = new Hono<{ Bindings: Env }>();
 
@@ -228,12 +229,11 @@ chatRoutes.post('/:id/messages', async (c) => {
 	// 同じルームの他の参加者にアプリ内通知 + プッシュ通知
 	const { results: otherMembers } = await c.env.umeyui_db
 		.prepare(
-			`SELECT r.user_id, u.push_token FROM reservations r
-       JOIN users u ON r.user_id = u.id
+			`SELECT r.user_id FROM reservations r
        WHERE r.slot_id = ? AND r.status = 'confirmed' AND r.user_id != ?`,
 		)
 		.bind(room.slot_id, authUser.sub)
-		.all<{ user_id: string; push_token: string | null }>();
+		.all<{ user_id: string }>();
 
 	if (otherMembers.length > 0) {
 		const notifBatch = otherMembers.map((m) =>
@@ -243,8 +243,7 @@ chatRoutes.post('/:id/messages', async (c) => {
 		);
 		await c.env.umeyui_db.batch(notifBatch);
 
-		const pushTokens = otherMembers.map((m) => m.push_token).filter(Boolean);
-		console.log('[Push] チャット通知:', senderName, '→', pushTokens.length, '件');
+		await Promise.all(otherMembers.map((m) => sendPushToUser(c.env, m.user_id, senderName, preview)));
 	}
 
 	return c.json(

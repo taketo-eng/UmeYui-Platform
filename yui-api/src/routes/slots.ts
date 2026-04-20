@@ -216,12 +216,13 @@ slotRoutes.post('/:id/cancel-event', async (c) => {
 			.prepare("UPDATE reservations SET status = 'cancelled' WHERE slot_id = ? AND status != 'cancelled'")
 			.bind(id),
 		c.env.umeyui_db
-			.prepare("UPDATE slots SET status = 'open', min_vendors = NULL, max_vendors = NULL WHERE id = ?")
+			.prepare("UPDATE slots SET status = 'open', min_vendors = NULL, max_vendors = NULL, name = NULL, start_time = NULL, end_time = NULL WHERE id = ?")
 			.bind(id),
 	];
 
 	if (chatRoom) {
 		batchOps.push(
+			c.env.umeyui_db.prepare('DELETE FROM user_room_reads WHERE room_id = ?').bind(chatRoom.id),
 			c.env.umeyui_db.prepare('DELETE FROM messages WHERE room_id = ?').bind(chatRoom.id),
 			c.env.umeyui_db.prepare('DELETE FROM chat_rooms WHERE id = ?').bind(chatRoom.id),
 		);

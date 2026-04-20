@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { requireAuth } from '../lib/middleware';
 import { confirmSlot, createNotification } from '../lib/slot_helpers';
+import { sendPushToUser } from '../lib/fcm';
 
 // /slots/:id/join-requests にマウント
 export const slotJoinRequestRoutes = new Hono<{ Bindings: Env }>();
@@ -75,7 +76,7 @@ slotJoinRequestRoutes.post('/:id/join-requests', async (c) => {
 			.bind(message ?? null, existingRequest.id)
 			.run();
 
-		await notifyInitiator(c.env.umeyui_db, slotId, authUser.sub);
+		await notifyInitiator(c.env, slotId, authUser.sub);
 		return c.json({ id: existingRequest.id, status: 'pending' }, 200);
 	}
 
@@ -85,7 +86,7 @@ slotJoinRequestRoutes.post('/:id/join-requests', async (c) => {
 		.bind(id, slotId, authUser.sub, message ?? null)
 		.run();
 
-	await notifyInitiator(c.env.umeyui_db, slotId, authUser.sub);
+	await notifyInitiator(c.env, slotId, authUser.sub);
 
 	return c.json({ id, status: 'pending' }, 201);
 });
@@ -113,7 +114,7 @@ slotJoinRequestRoutes.get('/:id/join-requests', async (c) => {
 		.prepare(
 			`
       SELECT jr.id, jr.status, jr.message, jr.response_message, jr.created_at,
-             u.id AS requester_id, u.shop_name, u.avatar_url, u.email
+             u.id AS requester_id, u.shop_name, u.avatar_url
       FROM join_requests jr
       JOIN users u ON jr.requester_id = u.id
       WHERE jr.slot_id = ?
@@ -136,7 +137,7 @@ joinRequestRoutes.get('/incoming', async (c) => {
 		.prepare(
 			`
       SELECT jr.id, jr.slot_id, jr.status, jr.message, jr.created_at,
-             u.id AS requester_id, u.shop_name, u.avatar_url, u.email,
+             u.id AS requester_id, u.shop_name, u.avatar_url,
              s.date, s.name AS slot_name, s.start_time, s.end_time, s.description
       FROM join_requests jr
       JOIN users u ON jr.requester_id = u.id
@@ -233,7 +234,7 @@ joinRequestRoutes.patch('/:requestId', async (c) => {
 			request.slot_id,
 			`${rejectSlot?.date ?? ''}の参加申請が却下されました`,
 		);
-		console.log('[Push] 参加申請却下通知 → requester:', request.requester_id);
+		await sendPushToUser(c.env, request.requester_id, '参加申請が却下されました', `${rejectSlot?.date ?? ''}の参加申請が却下されました`);
 		return c.json({ message: '申請を却下しました' });
 	}
 
@@ -287,7 +288,7 @@ joinRequestRoutes.patch('/:requestId', async (c) => {
 	const newCount = countResult?.count ?? 0;
 
 	if (slot.min_vendors !== null && newCount >= slot.min_vendors) {
-		await confirmSlot(c.env.umeyui_db, request.slot_id);
+		await confirmSlot(c.env, request.slot_id);
 	}
 
 	// 申請者にアプリ内通知
@@ -302,26 +303,27 @@ joinRequestRoutes.patch('/:requestId', async (c) => {
 		request.slot_id,
 		`${approveSlot?.date ?? ''}の参加申請が承認されました`,
 	);
-	console.log('[Push] 参加申請承認通知 → requester:', request.requester_id);
+	await sendPushToUser(c.env, request.requester_id, '参加申請が承認されました', `${approveSlot?.date ?? ''}の参加申請が承認されました`);
 	return c.json({ message: '申請を承認しました', reservation_id: reservationId });
 });
 
 // ---- ヘルパー ----
 
-async function notifyInitiator(db: D1Database, slotId: string, requesterId: string): Promise<void> {
-	const initiator = await db
+async function notifyInitiator(env: Env, slotId: string, requesterId: string): Promise<void> {
+	const initiator = await env.umeyui_db
 		.prepare(
-			`SELECT u.push_token, u.shop_name FROM users u
+			`SELECT u.id, u.shop_name FROM users u
        JOIN reservations r ON r.user_id = u.id
        WHERE r.slot_id = ? AND r.is_initiator = 1 AND r.status != 'cancelled'`,
 		)
 		.bind(slotId)
-		.first<{ push_token: string | null; shop_name: string | null }>();
+		.first<{ id: string; shop_name: string | null }>();
 
-	const requester = await db.prepare('SELECT shop_name FROM users WHERE id = ?').bind(requesterId).first<{
+	const requester = await env.umeyui_db.prepare('SELECT shop_name FROM users WHERE id = ?').bind(requesterId).first<{
 		shop_name: string | null;
 	}>();
 
-	// TODO: FCM / APNs 送信
-	console.log('[Push] 発起人への参加申請通知:', initiator?.shop_name, '←', requester?.shop_name ?? requesterId);
+	if (initiator?.id) {
+		await sendPushToUser(env, initiator.id, '参加申請が届きました', `${requester?.shop_name ?? '出店者'}から参加申請が届きました`);
+	}
 }

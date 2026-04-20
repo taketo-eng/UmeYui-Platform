@@ -1,32 +1,42 @@
 // 枠確定・チャットルーム削除・通知作成の共通処理
+import { sendPushNotification } from './fcm';
 
-export async function confirmSlot(db: D1Database, slotId: string): Promise<void> {
+export async function confirmSlot(env: Env, slotId: string): Promise<void> {
 	const roomId = crypto.randomUUID();
-	await db.batch([
-		db.prepare("UPDATE slots SET status = 'confirmed' WHERE id = ?").bind(slotId),
-		db.prepare("UPDATE reservations SET status = 'confirmed' WHERE slot_id = ? AND status = 'pending'").bind(slotId),
-		db.prepare('INSERT INTO chat_rooms (id, slot_id) VALUES (?, ?)').bind(roomId, slotId),
+	await env.umeyui_db.batch([
+		env.umeyui_db.prepare("UPDATE slots SET status = 'confirmed' WHERE id = ?").bind(slotId),
+		env.umeyui_db.prepare("UPDATE reservations SET status = 'confirmed' WHERE slot_id = ? AND status = 'pending'").bind(slotId),
+		env.umeyui_db.prepare('INSERT INTO chat_rooms (id, slot_id) VALUES (?, ?)').bind(roomId, slotId),
 	]);
-	await sendPushToParticipants(db, slotId, {
+	await sendPushToParticipants(env, slotId, {
 		title: '開催確定！',
 		body: 'チャットルームが開きました。当日に向けて話し合いましょう！',
 	});
 }
 
-async function sendPushToParticipants(db: D1Database, slotId: string, payload: { title: string; body: string }): Promise<void> {
-	const { results } = await db
+async function sendPushToParticipants(env: Env, slotId: string, payload: { title: string; body: string }): Promise<void> {
+	const { results } = await env.umeyui_db
 		.prepare(
 			`
-      SELECT u.push_token FROM users u
-      JOIN reservations r ON u.id = r.user_id
-      WHERE r.slot_id = ? AND r.status = 'confirmed' AND u.push_token IS NOT NULL
+      SELECT DISTINCT f.token FROM fcm_tokens f
+      JOIN users u ON f.user_id = u.id
+      LEFT JOIN reservations r ON u.id = r.user_id AND r.slot_id = ?
+      WHERE (r.status = 'confirmed' OR u.role = 'admin')
     `,
 		)
 		.bind(slotId)
-		.all<{ push_token: string }>();
+		.all<{ token: string }>();
 
-	// TODO: FCM / APNs への実際の送信処理はFlutter連携時に実装
-	console.log('[Push] 参加者への通知:', payload.title, '→', results.length, '件');
+	await Promise.all(results.map((r) => sendPushNotification(env, r.token, payload.title, payload.body)));
+}
+
+export async function sendPushToAllActive(env: Env, excludeUserId: string, title: string, body: string): Promise<void> {
+	const { results } = await env.umeyui_db
+		.prepare("SELECT f.token FROM fcm_tokens f JOIN users u ON f.user_id = u.id WHERE u.is_active = 1 AND u.id != ?")
+		.bind(excludeUserId)
+		.all<{ token: string }>();
+
+	await Promise.all(results.map((r) => sendPushNotification(env, r.token, title, body)));
 }
 
 // 特定ユーザーに通知を作成する
@@ -76,6 +86,7 @@ export async function deleteChatRoom(db: D1Database, slotId: string): Promise<vo
 		.first<{ id: string }>();
 	if (room) {
 		await db.batch([
+			db.prepare('DELETE FROM user_room_reads WHERE room_id = ?').bind(room.id),
 			db.prepare('DELETE FROM messages WHERE room_id = ?').bind(room.id),
 			db.prepare('DELETE FROM chat_rooms WHERE id = ?').bind(room.id),
 		]);

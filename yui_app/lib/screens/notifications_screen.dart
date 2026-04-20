@@ -363,7 +363,7 @@ class _IncomingCardState extends State<_IncomingCard> {
                           : null,
                       child: req.avatarUrl == null
                           ? Text(
-                              (req.shopName ?? req.email ?? '?')
+                              (req.shopName ?? '?')
                                   .substring(0, 1)
                                   .toUpperCase(),
                               style: const TextStyle(fontSize: 14),
@@ -376,13 +376,9 @@ class _IncomingCardState extends State<_IncomingCard> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            req.shopName ?? req.email ?? '名前未設定',
+                            req.shopName ?? '名前未設定',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          if (req.email != null)
-                            Text(req.email!,
-                                style: const TextStyle(
-                                    fontSize: 12, color: Colors.grey)),
                         ],
                       ),
                     ),

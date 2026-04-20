@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { requireAuth } from '../lib/middleware';
-import { confirmSlot, deleteChatRoom, createNotificationsForAllVendors } from '../lib/slot_helpers';
+import { confirmSlot, deleteChatRoom, createNotificationsForAllVendors, sendPushToAllActive } from '../lib/slot_helpers';
+import { sendPushToUser } from '../lib/fcm';
 
 export const reservationRoutes = new Hono<{ Bindings: Env }>();
 
@@ -120,9 +121,17 @@ reservationRoutes.post('/:id/reservations', async (c) => {
 			`${slotInfo?.date ?? ''}の枠で出店者の募集が始まりました（最低${min_vendors}人・最大${max_vendors}人）`,
 		);
 
-		// min_vendors=1 の場合は発起人1人で即確定
+		// min_vendors=1 の場合は発起人1人で即確定（確定通知はconfirmSlot内で送信）
 		if (min_vendors === 1) {
-			await confirmSlot(c.env.umeyui_db, slotId);
+			await confirmSlot(c.env, slotId);
+		} else {
+			// 2人以上が必要な場合のみ募集開始通知をプッシュ
+			await sendPushToAllActive(
+				c.env,
+				authUser.sub,
+				'出店枠の募集が始まりました',
+				`${slotInfo?.date ?? ''}の枠で出店者の募集が始まりました（最低${min_vendors}人）`,
+			);
 		}
 
 		return c.json({ id: reservationId, status: 'pending', is_initiator: true }, 201);
@@ -150,6 +159,23 @@ reservationRoutes.delete('/:id/reservations', async (c) => {
 		return c.json({ error: 'キャンセルできる予約が見つかりません' }, 404);
 	}
 
+	// キャンセルする本人の情報を取得（通知用）
+	const canceller = await c.env.umeyui_db
+		.prepare('SELECT shop_name FROM users WHERE id = ?')
+		.bind(authUser.sub)
+		.first<{ shop_name: string | null }>();
+	const cancellerName = canceller?.shop_name ?? '参加者';
+	const isInitiator = reservation.is_initiator === 1;
+
+	// キャンセル前に他の参加者のuser_idを取得
+	const { results: otherMembers } = await c.env.umeyui_db
+		.prepare(
+			`SELECT user_id FROM reservations
+       WHERE slot_id = ? AND user_id != ? AND status != 'cancelled'`,
+		)
+		.bind(slotId, authUser.sub)
+		.all<{ user_id: string }>();
+
 	// 自分の予約をキャンセル
 	await c.env.umeyui_db.prepare("UPDATE reservations SET status = 'cancelled' WHERE id = ?").bind(reservation.id).run();
 
@@ -165,7 +191,7 @@ reservationRoutes.delete('/:id/reservations', async (c) => {
 		// 全員いなくなった → チャットルーム削除・openに戻してmin/maxをリセット
 		await deleteChatRoom(c.env.umeyui_db, slotId);
 		await c.env.umeyui_db
-			.prepare("UPDATE slots SET status = 'open', min_vendors = NULL, max_vendors = NULL WHERE id = ?")
+			.prepare("UPDATE slots SET status = 'open', min_vendors = NULL, max_vendors = NULL, name = NULL, start_time = NULL, end_time = NULL WHERE id = ?")
 			.bind(slotId)
 			.run();
 	} else {
@@ -198,6 +224,14 @@ reservationRoutes.delete('/:id/reservations', async (c) => {
 				c.env.umeyui_db.prepare("UPDATE reservations SET status = 'pending' WHERE slot_id = ? AND status = 'confirmed'").bind(slotId),
 			]);
 		}
+	}
+
+	// 他の参加者にプッシュ通知
+	if (otherMembers.length > 0) {
+		const { title, body } = isInitiator
+			? { title: '開催が中止になりました', body: `発起人（${cancellerName}）が参加を取りやめたため、この枠の開催予定がなくなりました` }
+			: { title: `${cancellerName}がキャンセルしました`, body: '参加者が出店をキャンセルしました。人数をご確認ください' };
+		await Promise.all(otherMembers.map((m) => sendPushToUser(c.env, m.user_id, title, body)));
 	}
 
 	return c.json({ message: '予約をキャンセルしました' });

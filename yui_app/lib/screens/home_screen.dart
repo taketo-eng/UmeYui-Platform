@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/api_client.dart';
 import '../core/auth_provider.dart';
+import '../core/notification_handler.dart';
 import '../models/app_notification.dart';
 import '../models/chat.dart';
 import '../models/join_request.dart';
@@ -27,6 +28,9 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadPendingCount();
     _loadChatUnread();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      setupNotificationHandlers(context);
+    });
   }
 
   Future<void> _loadPendingCount() async {
