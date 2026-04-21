@@ -50,6 +50,8 @@ slotRoutes.get('/', async (c) => {
 	const authUser = await requireAuth(c);
 	if (!authUser) return c.res;
 
+	const today = new Date().toISOString().slice(0, 10);
+
 	const { results: slots } = await c.env.umeyui_db
 		.prepare(
 			`
@@ -59,10 +61,12 @@ slotRoutes.get('/', async (c) => {
       FROM slots s
       LEFT JOIN reservations r
         ON s.id = r.slot_id AND r.status != 'cancelled'
+      WHERE s.date >= ?
       GROUP BY s.id
       ORDER BY s.date ASC
     `,
 		)
+		.bind(today)
 		.all();
 
 	// 全スロットの参加者を一括取得
