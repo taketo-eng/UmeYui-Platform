@@ -11,6 +11,7 @@ import 'chat_screen.dart';
 import 'profile_screen.dart';
 import 'admin_screen.dart';
 import 'notifications_screen.dart';
+import 'package:upgrader/upgrader.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -105,7 +106,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: _screens),
+      body: UpgradeAlert(
+        upgrader: Upgrader(),
+        dialogStyle: UpgradeDialogStyle.cupertino,
+        barrierDismissible: false,
+        showIgnore: false,
+        showLater: false,
+        child: IndexedStack(index: _currentIndex, children: _screens),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
