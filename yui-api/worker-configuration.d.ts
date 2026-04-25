@@ -13,6 +13,7 @@ declare namespace Cloudflare {
 		FIREBASE_PROJECT_ID: string;
 		FIREBASE_CLIENT_EMAIL: string;
 		FIREBASE_PRIVATE_KEY: string;
+		VERCEL_DEPLOY_HOOK_URL: string;
 	}
 }
 interface Env extends Cloudflare.Env {}

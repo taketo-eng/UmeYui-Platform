@@ -23,6 +23,10 @@ export async function confirmSlot(env: Env, slotId: string): Promise<void> {
 		title: '開催確定！',
 		body: `${initiatorName}主催のイベントが確定しました！`,
 	});
+
+	if (env.VERCEL_DEPLOY_HOOK_URL) {
+		await fetch(env.VERCEL_DEPLOY_HOOK_URL, { method: 'POST' }).catch(() => {});
+	}
 }
 
 async function sendPushToConfirmedParticipants(env: Env, slotId: string, payload: { title: string; body: string }): Promise<void> {

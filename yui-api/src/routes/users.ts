@@ -102,6 +102,10 @@ userRoutes.patch('/:id', async (c) => {
 		.bind(...values)
 		.run();
 
+	if (c.env.VERCEL_DEPLOY_HOOK_URL) {
+		await fetch(c.env.VERCEL_DEPLOY_HOOK_URL, { method: 'POST' }).catch(() => {});
+	}
+
 	return c.json({ message: 'プロフィールを更新しました' });
 });
 
