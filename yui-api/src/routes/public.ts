@@ -33,8 +33,7 @@ publicRoutes.get('/events', async (c) => {
 		slots.map(async (slot) => {
 			const { results: participants } = await c.env.umeyui_db
 				.prepare(
-					`SELECT u.shop_name, u.avatar_url, u.homepage_avatar_url,
-                  u.website_url, u.instagram_url, u.x_url, u.line_url, u.facebook_url
+					`SELECT u.shop_name, u.avatar_url
            FROM users u
            JOIN reservations r ON u.id = r.user_id
            WHERE r.slot_id = ? AND r.status = 'confirmed'
@@ -44,12 +43,6 @@ publicRoutes.get('/events', async (c) => {
 				.all<{
 					shop_name: string | null;
 					avatar_url: string | null;
-					homepage_avatar_url: string | null;
-					website_url: string | null;
-					instagram_url: string | null;
-					x_url: string | null;
-					line_url: string | null;
-					facebook_url: string | null;
 				}>();
 
 			return {
@@ -57,7 +50,6 @@ publicRoutes.get('/events', async (c) => {
 				participants: participants.map((p) => ({
 					...p,
 					avatar_url: p.avatar_url ? `${apiOrigin}${p.avatar_url}` : null,
-					homepage_avatar_url: p.homepage_avatar_url ? `${apiOrigin}${p.homepage_avatar_url}` : null,
 				})),
 			};
 		}),
@@ -76,7 +68,7 @@ publicRoutes.get('/vendors', async (c) => {
 			`SELECT id, shop_name, bio, avatar_url, homepage_avatar_url,
               website_url, instagram_url, x_url, line_url, facebook_url
        FROM users
-       WHERE role = 'vendor' AND is_active = 1
+       WHERE role = 'vendor' AND is_active = 1 AND email NOT LIKE '%@example.com'
        ORDER BY created_at ASC`,
 		)
 		.all<{
