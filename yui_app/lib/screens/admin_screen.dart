@@ -111,6 +111,8 @@ class _AdminScreenState extends State<AdminScreen> {
     final shopNameCtrl = TextEditingController();
     bool obscure = true;
 
+    bool isSaving = false;
+
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -166,7 +168,7 @@ class _AdminScreenState extends State<AdminScreen> {
               child: const Text('キャンセル'),
             ),
             FilledButton(
-              onPressed: () async {
+              onPressed: isSaving ? null : () async {
                 if (emailCtrl.text.trim().isEmpty ||
                     passwordCtrl.text.isEmpty) {
                   ScaffoldMessenger.of(ctx).showSnackBar(
@@ -177,6 +179,7 @@ class _AdminScreenState extends State<AdminScreen> {
                   );
                   return;
                 }
+                setDialogState(() => isSaving = true);
                 try {
                   await apiClient.createUser(
                     email: emailCtrl.text.trim(),
@@ -195,6 +198,7 @@ class _AdminScreenState extends State<AdminScreen> {
                   }
                 } on ApiException catch (e) {
                   if (ctx.mounted) {
+                    setDialogState(() => isSaving = false);
                     ScaffoldMessenger.of(ctx).showSnackBar(
                       SnackBar(
                         content: Text(e.message),
@@ -204,7 +208,9 @@ class _AdminScreenState extends State<AdminScreen> {
                   }
                 }
               },
-              child: const Text('作成'),
+              child: isSaving
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('作成'),
             ),
           ],
         ),
@@ -289,9 +295,9 @@ class _UserTile extends StatelessWidget {
 }
 
 // ユーザー詳細 BottomSheet の中身
-class _UserDetailSheet extends StatelessWidget {
+class _UserDetailSheet extends StatefulWidget {
   final User user;
-  final bool isSelf; // 管理者自身かどうか
+  final bool isSelf;
   final VoidCallback onChanged;
 
   const _UserDetailSheet({
@@ -299,6 +305,17 @@ class _UserDetailSheet extends StatelessWidget {
     required this.isSelf,
     required this.onChanged,
   });
+
+  @override
+  State<_UserDetailSheet> createState() => _UserDetailSheetState();
+}
+
+class _UserDetailSheetState extends State<_UserDetailSheet> {
+  bool _isTogglingActive = false;
+
+  User get user => widget.user;
+  bool get isSelf => widget.isSelf;
+  VoidCallback get onChanged => widget.onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -378,12 +395,14 @@ class _UserDetailSheet extends StatelessWidget {
                     color: user.isActive ? Colors.orange : Colors.green,
                   ),
                 ),
-                onPressed: () async {
+                onPressed: _isTogglingActive ? null : () async {
+                  setState(() => _isTogglingActive = true);
                   try {
                     await apiClient.setUserActive(user.id, !user.isActive);
                     onChanged();
                   } on ApiException catch (e) {
-                    if (context.mounted) {
+                    if (mounted) {
+                      setState(() => _isTogglingActive = false);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(e.message),
@@ -465,10 +484,12 @@ class _UserDetailSheet extends StatelessWidget {
   Future<void> _showEditDialog(BuildContext context) async {
     final shopNameCtrl = TextEditingController(text: user.shopName);
     final bioCtrl = TextEditingController(text: user.bio);
+    bool isSaving = false;
 
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
         insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         title: Text('${user.shopName ?? user.email} を編集'),
         content: Column(
@@ -498,7 +519,8 @@ class _UserDetailSheet extends StatelessWidget {
             child: const Text('キャンセル'),
           ),
           FilledButton(
-            onPressed: () async {
+            onPressed: isSaving ? null : () async {
+              setDialogState(() => isSaving = true);
               try {
                 await apiClient.updateProfile(
                   user.id,
@@ -511,6 +533,7 @@ class _UserDetailSheet extends StatelessWidget {
                 }
               } on ApiException catch (e) {
                 if (ctx.mounted) {
+                  setDialogState(() => isSaving = false);
                   ScaffoldMessenger.of(ctx).showSnackBar(
                     SnackBar(
                       content: Text(e.message),
@@ -520,11 +543,14 @@ class _UserDetailSheet extends StatelessWidget {
                 }
               }
             },
-            child: const Text('保存'),
+            child: isSaving
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('保存'),
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   Future<void> _showResetPasswordDialog(BuildContext context) async {

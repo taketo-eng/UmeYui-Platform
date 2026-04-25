@@ -142,6 +142,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final lineCtrl = TextEditingController(text: user.lineUrl);
     final facebookCtrl = TextEditingController(text: user.facebookUrl);
 
+    bool isSaving = false;
+
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -236,7 +238,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: const Text('キャンセル'),
           ),
           FilledButton(
-            onPressed: () async {
+            onPressed: isSaving ? null : () async {
+              setDialogState(() => isSaving = true);
               final auth = context.read<AuthProvider>();
               try {
                 await apiClient.updateProfile(
@@ -263,6 +266,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 if (ctx.mounted) Navigator.pop(ctx);
               } on ApiException catch (e) {
                 if (ctx.mounted) {
+                  setDialogState(() => isSaving = false);
                   ScaffoldMessenger.of(ctx).showSnackBar(
                     SnackBar(
                       content: Text(e.message),
@@ -272,7 +276,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 }
               }
             },
-            child: const Text('保存'),
+            child: isSaving
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('保存'),
           ),
         ],
       ),

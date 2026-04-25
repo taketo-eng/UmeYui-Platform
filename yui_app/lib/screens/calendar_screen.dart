@@ -1340,6 +1340,7 @@ class _ReserveButtonState extends State<_ReserveButton> {
     TimeOfDay? startTime;
     TimeOfDay? endTime;
     final descCtrl = TextEditingController();
+    bool isConfirming = false;
 
     return showDialog<_InitiatorSettings>(
       context: context,
@@ -1504,7 +1505,8 @@ class _ReserveButtonState extends State<_ReserveButton> {
               child: const Text('キャンセル'),
             ),
             FilledButton(
-              onPressed: () async {
+              onPressed: isConfirming ? null : () async {
+                setDialogState(() => isConfirming = true);
                 final timeStr = (startTime != null && endTime != null)
                     ? '${_formatTime(startTime!)} 〜 ${_formatTime(endTime!)}'
                     : '未設定';
@@ -1535,7 +1537,10 @@ class _ReserveButtonState extends State<_ReserveButton> {
                     ],
                   ),
                 );
-                if (confirmed != true) return;
+                if (confirmed != true) {
+                  setDialogState(() => isConfirming = false);
+                  return;
+                }
                 // 条件ダイアログを閉じて設定値を返す
                 if (ctx.mounted) {
                   Navigator.pop(
