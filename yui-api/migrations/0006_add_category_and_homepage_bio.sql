@@ -1,0 +1,2 @@
+ALTER TABLE users ADD COLUMN category TEXT NOT NULL DEFAULT 'その他';
+ALTER TABLE users ADD COLUMN homepage_bio TEXT;

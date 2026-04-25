@@ -134,6 +134,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _showEditDialog(BuildContext context, User user) async {
     final shopNameCtrl = TextEditingController(text: user.shopName);
     final bioCtrl = TextEditingController(text: user.bio);
+    final homepageBioCtrl = TextEditingController(text: user.homepageBio);
+    String selectedCategory = user.category;
     final websiteCtrl = TextEditingController(text: user.websiteUrl);
     final instagramCtrl = TextEditingController(text: user.instagramUrl);
     final xCtrl = TextEditingController(text: user.xUrl);
@@ -142,7 +144,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
         insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         title: const Text('プロフィールを編集'),
         content: SizedBox(
@@ -159,11 +162,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: selectedCategory,
+                decoration: const InputDecoration(
+                  labelText: '出店カテゴリー',
+                  border: OutlineInputBorder(),
+                ),
+                items: shopCategories
+                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                    .toList(),
+                onChanged: (v) => setDialogState(() => selectedCategory = v!),
+              ),
+              const SizedBox(height: 12),
               TextField(
                 controller: bioCtrl,
                 maxLines: 3,
                 decoration: const InputDecoration(
-                  labelText: '自己紹介',
+                  labelText: 'アプリ内自己紹介',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: homepageBioCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'ホームページ用自己紹介',
+                  helperText: 'umeya.lifeに表示されます',
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -218,6 +243,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   auth.user!.id,
                   shopName: shopNameCtrl.text.trim(),
                   bio: bioCtrl.text.trim(),
+                  homepageBio: homepageBioCtrl.text.trim(),
+                  category: selectedCategory,
                   websiteUrl: websiteCtrl.text.trim().isEmpty
                       ? null
                       : websiteCtrl.text.trim(),
@@ -249,7 +276,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 }
 
@@ -517,6 +545,12 @@ class _ProfileInfo extends StatelessWidget {
           style: Theme.of(
             context,
           ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 6),
+        Chip(
+          label: Text(user.category, style: const TextStyle(fontSize: 12)),
+          padding: EdgeInsets.zero,
+          visualDensity: VisualDensity.compact,
         ),
         if (user.bio != null && user.bio!.isNotEmpty) ...[
           const SizedBox(height: 8),

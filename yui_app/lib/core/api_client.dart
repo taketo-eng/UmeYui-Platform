@@ -167,6 +167,8 @@ class ApiClient {
     String userId, {
     String? shopName,
     String? bio,
+    String? homepageBio,
+    String? category,
     String? websiteUrl,
     String? instagramUrl,
     String? xUrl,
@@ -176,6 +178,8 @@ class ApiClient {
     await patch('/users/$userId', {
       if (shopName != null) 'shop_name': shopName,
       if (bio != null) 'bio': bio,
+      if (homepageBio != null) 'homepage_bio': homepageBio,
+      if (category != null) 'category': category,
       if (websiteUrl != null) 'website_url': websiteUrl,
       if (instagramUrl != null) 'instagram_url': instagramUrl,
       if (xUrl != null) 'x_url': xUrl,

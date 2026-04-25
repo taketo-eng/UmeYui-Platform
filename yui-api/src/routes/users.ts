@@ -45,7 +45,7 @@ userRoutes.get('/', async (c) => {
 
 	const { results } = await c.env.umeyui_db
 		.prepare(
-			'SELECT id, email, role, shop_name, bio, avatar_url, homepage_avatar_url, website_url, instagram_url, x_url, line_url, facebook_url, is_active, created_at FROM users ORDER BY created_at DESC',
+			'SELECT id, email, role, shop_name, bio, homepage_bio, category, avatar_url, homepage_avatar_url, website_url, instagram_url, x_url, line_url, facebook_url, is_active, created_at FROM users ORDER BY created_at DESC',
 		)
 		.all();
 
@@ -60,9 +60,13 @@ userRoutes.get('/:id', async (c) => {
 
 	const { id } = c.req.param();
 
+	const isSelfOrAdmin = authUser.sub === id || authUser.role === 'admin';
+
 	const user = await c.env.umeyui_db
 		.prepare(
-			'SELECT id, email, role, shop_name, bio, avatar_url, homepage_avatar_url, website_url, instagram_url, x_url, line_url, facebook_url, is_active, created_at FROM users WHERE id = ?',
+			isSelfOrAdmin
+				? 'SELECT id, email, role, shop_name, bio, homepage_bio, category, avatar_url, homepage_avatar_url, website_url, instagram_url, x_url, line_url, facebook_url, is_active, created_at FROM users WHERE id = ?'
+				: 'SELECT id, email, role, shop_name, bio, category, avatar_url, website_url, instagram_url, x_url, line_url, facebook_url, is_active, created_at FROM users WHERE id = ?',
 		)
 		.bind(id)
 		.first();
@@ -87,7 +91,7 @@ userRoutes.patch('/:id', async (c) => {
 	const body = await c.req.json();
 
 	// 送られてきたフィールドだけ UPDATE する（未送信フィールドは既存値を維持）
-	const allowedFields = ['shop_name', 'bio', 'website_url', 'instagram_url', 'x_url', 'line_url', 'facebook_url'] as const;
+	const allowedFields = ['shop_name', 'bio', 'homepage_bio', 'category', 'website_url', 'instagram_url', 'x_url', 'line_url', 'facebook_url'] as const;
 	const updates = allowedFields.filter((f) => f in body);
 
 	if (updates.length === 0) {

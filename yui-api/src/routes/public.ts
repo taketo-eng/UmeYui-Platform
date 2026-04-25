@@ -106,7 +106,7 @@ publicRoutes.get('/vendors', async (c) => {
 
 	const { results } = await c.env.umeyui_db
 		.prepare(
-			`SELECT id, shop_name, bio, avatar_url, homepage_avatar_url,
+			`SELECT id, shop_name, homepage_bio, category, avatar_url, homepage_avatar_url,
               website_url, instagram_url, x_url, line_url, facebook_url
        FROM users
        WHERE role = 'vendor' AND is_active = 1 AND email NOT LIKE '%@example.com'
@@ -115,7 +115,8 @@ publicRoutes.get('/vendors', async (c) => {
 		.all<{
 			id: string;
 			shop_name: string | null;
-			bio: string | null;
+			homepage_bio: string | null;
+			category: string;
 			avatar_url: string | null;
 			homepage_avatar_url: string | null;
 			website_url: string | null;

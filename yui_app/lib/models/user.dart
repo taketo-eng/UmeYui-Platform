@@ -1,9 +1,26 @@
+const shopCategories = [
+  'その他',
+  '飲食・ドリンク',
+  'スイーツ・パン',
+  'ハンドメイド・クラフト',
+  'アクセサリー・ジュエリー',
+  '衣類・ファッション',
+  '雑貨・インテリア',
+  '植物・フラワー',
+  'アート・イラスト',
+  '音楽・パフォーマンス',
+  'ワークショップ',
+  'セミナー',
+];
+
 class User {
   final String id;
   final String email;
   final String role;
   final String? shopName;
   final String? bio;
+  final String? homepageBio;
+  final String category;
   final String? avatarUrl;
   final String? homepageAvatarUrl;
   final bool isActive;
@@ -19,6 +36,8 @@ class User {
     required this.role,
     this.shopName,
     this.bio,
+    this.homepageBio,
+    this.category = 'その他',
     this.avatarUrl,
     this.homepageAvatarUrl,
     required this.isActive,
@@ -35,6 +54,8 @@ class User {
     role: json['role'] as String,
     shopName: json['shop_name'] as String?,
     bio: json['bio'] as String?,
+    homepageBio: json['homepage_bio'] as String?,
+    category: json['category'] as String? ?? 'その他',
     avatarUrl: json['avatar_url'] as String?,
     homepageAvatarUrl: json['homepage_avatar_url'] as String?,
     isActive: (json['is_active'] as int) == 1,
@@ -48,10 +69,10 @@ class User {
   bool get isAdmin => role == 'admin';
 
   Map<String, String> get socialLinks => {
-    if (websiteUrl != null) 'website': websiteUrl!,
-    if (instagramUrl != null) 'instagram': instagramUrl!,
-    if (xUrl != null) 'x': xUrl!,
-    if (lineUrl != null) 'line': lineUrl!,
-    if (facebookUrl != null) 'facebook': facebookUrl!,
+    if (websiteUrl case final v?) 'website': v,
+    if (instagramUrl case final v?) 'instagram': v,
+    if (xUrl case final v?) 'x': v,
+    if (lineUrl case final v?) 'line': v,
+    if (facebookUrl case final v?) 'facebook': v,
   };
 }
