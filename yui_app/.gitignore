@@ -47,3 +47,10 @@ app.*.map.json
 # Firebase config (sensitive - do not commit)
 android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
+
+ExportOptions.plist
+dart_defines/
+scripts/
+env.g.dart
+firebase_options.dart
+firebase_app_id_file.json
