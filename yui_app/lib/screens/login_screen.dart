@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../core/api_client.dart';
 import '../core/auth_provider.dart';
 
@@ -223,6 +224,27 @@ class _LoginScreenState extends State<LoginScreen> {
                               style: TextStyle(color: Color(0xFFc21244)),
                             ),
                           ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            TextButton(
+                              onPressed: () => launchUrl(Uri.parse('https://umeya.life/umeyui-terms')),
+                              child: const Text(
+                                '利用規約',
+                                style: TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                            ),
+                            const Text('・', style: TextStyle(color: Colors.grey)),
+                            TextButton(
+                              onPressed: () => launchUrl(Uri.parse('https://umeya.life/umeyui-privacy')),
+                              child: const Text(
+                                'プライバシーポリシー',
+                                style: TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
