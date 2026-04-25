@@ -1,19 +1,41 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 
-const ALLOWED_ORIGIN = 'https://umeya.life';
+const ALLOWED_ORIGINS = ['https://umeya.life', 'http://localhost:4321'];
+
+// IPごとのリクエスト数を記録（Workerのライフタイム中のみ有効）
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 30; // リクエスト上限
+const RATE_WINDOW_MS = 60_000; // 1分間
+
+function isRateLimited(ip: string): boolean {
+	const now = Date.now();
+	const entry = rateLimitMap.get(ip);
+	if (!entry || now > entry.resetAt) {
+		rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+		return false;
+	}
+	entry.count++;
+	return entry.count > RATE_LIMIT;
+}
 
 export const publicRoutes = new Hono<{ Bindings: Env }>();
 
 publicRoutes.use(
 	'*',
 	cors({
-		origin: ALLOWED_ORIGIN,
+		origin: (origin) => (ALLOWED_ORIGINS.includes(origin) ? origin : null),
 		allowMethods: ['GET', 'OPTIONS'],
 		allowHeaders: ['Content-Type'],
 		maxAge: 86400,
 	}),
 );
+
+publicRoutes.use('*', async (c, next) => {
+	const ip = c.req.header('CF-Connecting-IP') ?? 'unknown';
+	if (isRateLimited(ip)) return c.json({ error: 'Too many requests' }, 429);
+	await next();
+});
 
 type SlotRow = { id: string; date: string; name: string | null; start_time: string | null; end_time: string | null };
 
