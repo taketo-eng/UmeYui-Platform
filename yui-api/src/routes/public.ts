@@ -15,23 +15,12 @@ publicRoutes.use(
 	}),
 );
 
-// GET /public/events
-// 開催確定イベント一覧（認証不要・umeya.lifeホームページ向け）
-publicRoutes.get('/events', async (c) => {
-	const apiOrigin = new URL(c.req.url).origin;
+type SlotRow = { id: string; date: string; name: string | null; start_time: string | null; end_time: string | null };
 
-	const { results: slots } = await c.env.umeyui_db
-		.prepare(
-			`SELECT id, date, name, start_time, end_time
-       FROM slots
-       WHERE status = 'confirmed'
-       ORDER BY date ASC`,
-		)
-		.all<{ id: string; date: string; name: string | null; start_time: string | null; end_time: string | null }>();
-
-	const events = await Promise.all(
+async function buildEvents(env: Env, apiOrigin: string, slots: SlotRow[]) {
+	return Promise.all(
 		slots.map(async (slot) => {
-			const { results: participants } = await c.env.umeyui_db
+			const { results: participants } = await env.umeyui_db
 				.prepare(
 					`SELECT u.shop_name, u.avatar_url
            FROM users u
@@ -40,10 +29,7 @@ publicRoutes.get('/events', async (c) => {
            ORDER BY r.created_at ASC`,
 				)
 				.bind(slot.id)
-				.all<{
-					shop_name: string | null;
-					avatar_url: string | null;
-				}>();
+				.all<{ shop_name: string | null; avatar_url: string | null }>();
 
 			return {
 				...slot,
@@ -54,8 +40,41 @@ publicRoutes.get('/events', async (c) => {
 			};
 		}),
 	);
+}
 
-	return c.json({ events });
+// GET /public/events
+// 開催確定の今後のイベント一覧（認証不要・umeya.lifeホームページ向け）
+publicRoutes.get('/events', async (c) => {
+	const apiOrigin = new URL(c.req.url).origin;
+
+	const { results: slots } = await c.env.umeyui_db
+		.prepare(
+			`SELECT id, date, name, start_time, end_time
+       FROM slots
+       WHERE status = 'confirmed' AND date >= date('now')
+       ORDER BY date ASC`,
+		)
+		.all<SlotRow>();
+
+	return c.json({ events: await buildEvents(c.env, apiOrigin, slots) });
+});
+
+// GET /public/past-events
+// 開催確定の過去イベント一覧・最大50件（認証不要・umeya.lifeホームページ向け）
+publicRoutes.get('/past-events', async (c) => {
+	const apiOrigin = new URL(c.req.url).origin;
+
+	const { results: slots } = await c.env.umeyui_db
+		.prepare(
+			`SELECT id, date, name, start_time, end_time
+       FROM slots
+       WHERE status = 'confirmed' AND date < date('now')
+       ORDER BY date DESC
+       LIMIT 50`,
+		)
+		.all<SlotRow>();
+
+	return c.json({ events: await buildEvents(c.env, apiOrigin, slots) });
 });
 
 // GET /public/vendors
