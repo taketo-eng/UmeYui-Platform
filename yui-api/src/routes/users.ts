@@ -45,7 +45,7 @@ userRoutes.get('/', async (c) => {
 
 	const { results } = await c.env.umeyui_db
 		.prepare(
-			'SELECT id, email, role, shop_name, bio, avatar_url, website_url, instagram_url, x_url, line_url, facebook_url, is_active, created_at FROM users ORDER BY created_at DESC',
+			'SELECT id, email, role, shop_name, bio, avatar_url, homepage_avatar_url, website_url, instagram_url, x_url, line_url, facebook_url, is_active, created_at FROM users ORDER BY created_at DESC',
 		)
 		.all();
 
@@ -62,7 +62,7 @@ userRoutes.get('/:id', async (c) => {
 
 	const user = await c.env.umeyui_db
 		.prepare(
-			'SELECT id, email, role, shop_name, bio, avatar_url, website_url, instagram_url, x_url, line_url, facebook_url, is_active, created_at FROM users WHERE id = ?',
+			'SELECT id, email, role, shop_name, bio, avatar_url, homepage_avatar_url, website_url, instagram_url, x_url, line_url, facebook_url, is_active, created_at FROM users WHERE id = ?',
 		)
 		.bind(id)
 		.first();
@@ -255,6 +255,50 @@ userRoutes.post('/:id/avatar', async (c) => {
 	await c.env.umeyui_db.prepare('UPDATE users SET avatar_url = ? WHERE id = ?').bind(avatarUrl, id).run();
 
 	return c.json({ avatar_url: avatarUrl });
+});
+
+// POST /users/:id/homepage-avatar
+// 本人のみ: ホームページ用縦長プロフィール画像をアップロード
+userRoutes.post('/:id/homepage-avatar', async (c) => {
+	const authUser = await requireAuth(c);
+	if (!authUser) return c.res;
+
+	const { id } = c.req.param();
+
+	if (authUser.sub !== id) {
+		return c.json({ error: '権限がありません' }, 403);
+	}
+
+	const formData = await c.req.formData();
+	const file = formData.get('image') as File | null;
+
+	if (!file) {
+		return c.json({ error: 'image フィールドに画像ファイルを指定してください' }, 400);
+	}
+	if (!file.type.startsWith('image/')) {
+		return c.json({ error: '画像ファイル（JPEG / PNG / WebP）のみアップロードできます' }, 400);
+	}
+	if (file.size > 10 * 1024 * 1024) {
+		return c.json({ error: 'ファイルサイズは 10MB 以下にしてください' }, 400);
+	}
+
+	const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+	const key = `homepage-avatars/${id}.${ext}`;
+
+	await c.env.AVATAR_BUCKET.put(key, await file.arrayBuffer(), {
+		httpMetadata: { contentType: file.type },
+	});
+
+	for (const oldExt of ['jpg', 'png', 'webp']) {
+		if (oldExt !== ext) {
+			await c.env.AVATAR_BUCKET.delete(`homepage-avatars/${id}.${oldExt}`);
+		}
+	}
+
+	const homepageAvatarUrl = `/homepage-avatars/${id}.${ext}`;
+	await c.env.umeyui_db.prepare('UPDATE users SET homepage_avatar_url = ? WHERE id = ?').bind(homepageAvatarUrl, id).run();
+
+	return c.json({ homepage_avatar_url: homepageAvatarUrl });
 });
 
 // DELETE /users/:id

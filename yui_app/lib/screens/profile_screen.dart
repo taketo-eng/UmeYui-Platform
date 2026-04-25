@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -16,6 +17,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _isUploadingAvatar = false;
+  bool _isUploadingHomepageAvatar = false;
 
   Future<void> _pickAndUploadAvatar() async {
     final auth = context.read<AuthProvider>();
@@ -49,6 +51,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _pickAndUploadHomepageAvatar() async {
+    final auth = context.read<AuthProvider>();
+    final userId = auth.user?.id;
+    if (userId == null) return;
+
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+    if (picked == null || !mounted) return;
+
+    // 6:9（縦長 2:3）にクロップ
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      aspectRatio: const CropAspectRatio(ratioX: 2, ratioY: 3),
+      uiSettings: [
+        AndroidUiSettings(lockAspectRatio: true, hideBottomControls: true),
+        IOSUiSettings(aspectRatioLockEnabled: true, resetAspectRatioEnabled: false, aspectRatioPickerButtonHidden: true),
+      ],
+    );
+    if (cropped == null || !mounted) return;
+
+    setState(() => _isUploadingHomepageAvatar = true);
+    try {
+      await apiClient.uploadHomepageAvatar(userId, File(cropped.path));
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+      await auth.refreshUser();
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingHomepageAvatar = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -78,6 +117,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _ProfileInfo(user: user),
             const SizedBox(height: 16),
             _SocialLinks(user: user),
+            const Divider(height: 40),
+            _HomepageAvatarSection(
+              user: user,
+              isUploading: _isUploadingHomepageAvatar,
+              onTap: _pickAndUploadHomepageAvatar,
+            ),
             const Divider(height: 40),
             _ActionButtons(user: user),
           ],
@@ -387,6 +432,73 @@ class _AvatarSection extends StatelessWidget {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _HomepageAvatarSection extends StatelessWidget {
+  final User user;
+  final VoidCallback? onTap;
+  final bool isUploading;
+
+  const _HomepageAvatarSection({required this.user, this.onTap, this.isUploading = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasImage = user.homepageAvatarUrl != null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text('ホームページ用プロフィール画像', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(width: 6),
+            Text('縦長 2:3（推奨 600×900px）', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+          ],
+        ),
+        const SizedBox(height: 12),
+        GestureDetector(
+          onTap: isUploading ? null : onTap,
+          child: Container(
+            width: 100,
+            height: 150,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+              image: hasImage
+                  ? DecorationImage(image: NetworkImage(resolveUrl(user.homepageAvatarUrl!)), fit: BoxFit.cover)
+                  : null,
+            ),
+            child: isUploading
+                ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                : !hasImage
+                    ? Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.add_photo_alternate_outlined, color: theme.colorScheme.primary, size: 32),
+                          const SizedBox(height: 4),
+                          Text('画像を選択', style: TextStyle(fontSize: 11, color: theme.colorScheme.primary)),
+                        ],
+                      )
+                    : Align(
+                        alignment: Alignment.bottomRight,
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: CircleAvatar(
+                            radius: 14,
+                            backgroundColor: Colors.black54,
+                            child: Icon(Icons.edit, size: 14, color: Colors.white),
+                          ),
+                        ),
+                      ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text('この画像はumeya.lifeのホームページに表示されます', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
       ],
     );
   }

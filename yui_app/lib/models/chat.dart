@@ -26,6 +26,8 @@ class ChatRoom {
   final String? slotName;
   final String? startTime;
   final String? endTime;
+  final int? minVendors;
+  final int? maxVendors;
   final List<ChatMember> members;
   final String? lastMessageBody;
   final String? lastMessageAt;
@@ -38,6 +40,8 @@ class ChatRoom {
     this.slotName,
     this.startTime,
     this.endTime,
+    this.minVendors,
+    this.maxVendors,
     this.members = const [],
     this.lastMessageBody,
     this.lastMessageAt,
@@ -51,6 +55,8 @@ class ChatRoom {
     slotName: json['slot_name'] as String?,
     startTime: json['start_time'] as String?,
     endTime: json['end_time'] as String?,
+    minVendors: json['min_vendors'] as int?,
+    maxVendors: json['max_vendors'] as int?,
     members:
         (json['members'] as List<dynamic>?)
             ?.map((m) => ChatMember.fromJson(m as Map<String, dynamic>))

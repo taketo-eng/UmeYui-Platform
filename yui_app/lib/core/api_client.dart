@@ -231,6 +231,32 @@ class ApiClient {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> uploadHomepageAvatar(String userId, File imageFile) async {
+    final token = await getToken();
+    final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/users/$userId/homepage-avatar'));
+    if (token != null) request.headers['Authorization'] = 'Bearer $token';
+    final ext = imageFile.path.split('.').last.toLowerCase();
+    final mimeType = switch (ext) {
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      _ => 'image/jpeg',
+    };
+    request.files.add(await http.MultipartFile.fromPath('image', imageFile.path, contentType: MediaType.parse(mimeType)));
+    final streamed = await request.send();
+    final res = await http.Response.fromStream(streamed);
+    _checkStatus(res);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  // ---- パスワードリセット（未ログイン） ----
+  Future<Map<String, dynamic>> requestPasswordReset(String email, String newPassword) async {
+    return await post('/auth/forgot-password', {'email': email, 'new_password': newPassword}, auth: false) as Map<String, dynamic>;
+  }
+
+  Future<void> verifyPasswordReset(String email, String code) async {
+    await post('/auth/verify-forgot-password', {'email': email, 'code': code}, auth: false);
+  }
+
   Future<void> setUserActive(String userId, bool isActive) async {
     await patch('/users/$userId/active', {'is_active': isActive ? 1 : 0});
   }
@@ -262,12 +288,16 @@ class ApiClient {
     String? startTime,
     String? endTime,
     String? description,
+    int? minVendors,
+    int? maxVendors,
   }) async {
     await patch('/slots/$slotId', {
       if (name != null) 'name': name,
       if (startTime != null) 'start_time': startTime,
       if (endTime != null) 'end_time': endTime,
       if (description != null) 'description': description,
+      if (minVendors != null) 'min_vendors': minVendors,
+      if (maxVendors != null) 'max_vendors': maxVendors,
     });
   }
 

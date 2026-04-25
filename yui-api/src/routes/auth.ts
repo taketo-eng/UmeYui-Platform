@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { verifyPassword, createJwt, getAuthUser, hashPassword } from '../lib/auth';
-import { sendPasswordChangeCode, sendEmailChangeCode } from '../lib/email';
+import { sendPasswordChangeCode, sendEmailChangeCode, sendPasswordResetCode } from '../lib/email';
 
 export const authRoutes = new Hono<{ Bindings: Env }>();
 
@@ -103,6 +103,96 @@ authRoutes.post('/logout', async (c) => {
 			.run();
 	}
 	return c.json({ message: 'ログアウトしました' });
+});
+
+// POST /auth/forgot-password
+// 未ログイン: メールアドレスと新パスワードを受け取り確認コードを送信
+authRoutes.post('/forgot-password', async (c) => {
+	const { email, new_password } = await c.req.json();
+
+	if (!email || !new_password) {
+		return c.json({ error: 'メールアドレスと新しいパスワードを入力してください' }, 400);
+	}
+	if (new_password.length < 8) {
+		return c.json({ error: 'パスワードは8文字以上にしてください' }, 400);
+	}
+
+	// レート制限（同じメールアドレスへの送信は1時間に3回まで）
+	const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+	await c.env.umeyui_db.prepare('DELETE FROM password_reset_tokens WHERE created_at < ?').bind(cutoff).run();
+
+	const recent = await c.env.umeyui_db
+		.prepare('SELECT COUNT(*) AS cnt FROM password_reset_tokens WHERE email = ? AND created_at > ?')
+		.bind(email, cutoff)
+		.first<{ cnt: number }>();
+	if ((recent?.cnt ?? 0) >= 3) {
+		return c.json({ error: 'リクエストが多すぎます。しばらくしてから再試行してください。' }, 429);
+	}
+
+	// ユーザー存在確認（結果は外部に漏らさない）
+	const user = await c.env.umeyui_db
+		.prepare('SELECT id FROM users WHERE email = ? AND is_active = 1')
+		.bind(email)
+		.first<{ id: string }>();
+
+	if (user) {
+		await c.env.umeyui_db.prepare('DELETE FROM password_reset_tokens WHERE email = ?').bind(email).run();
+
+		const codeArray = new Uint32Array(1);
+		crypto.getRandomValues(codeArray);
+		const code = (100000 + (codeArray[0] % 900000)).toString();
+		const newHash = await hashPassword(new_password);
+		const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+
+		await c.env.umeyui_db
+			.prepare('INSERT INTO password_reset_tokens (id, email, code, new_password_hash, expires_at) VALUES (?, ?, ?, ?, ?)')
+			.bind(crypto.randomUUID(), email, code, newHash, expiresAt)
+			.run();
+
+		await sendPasswordResetCode(c.env.RESEND_API_KEY, email, code);
+	}
+
+	// メール存在有無に関わらず同じレスポンス（情報漏洩防止）
+	const [localPart, domain] = email.split('@');
+	const maskedEmail = `${localPart.slice(0, 2)}****@${domain}`;
+	return c.json({ message: '確認コードをメールで送信しました', email_hint: maskedEmail });
+});
+
+// POST /auth/verify-forgot-password
+// 未ログイン: 確認コードを検証してパスワードをリセット
+authRoutes.post('/verify-forgot-password', async (c) => {
+	const { email, code } = await c.req.json();
+
+	if (!email || !code) {
+		return c.json({ error: 'メールアドレスと確認コードを入力してください' }, 400);
+	}
+
+	const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+	const token = await c.env.umeyui_db
+		.prepare('SELECT id, new_password_hash FROM password_reset_tokens WHERE email = ? AND code = ? AND expires_at > ?')
+		.bind(email, code, now)
+		.first<{ id: string; new_password_hash: string }>();
+
+	if (!token) {
+		return c.json({ error: '確認コードが無効または期限切れです' }, 400);
+	}
+
+	const user = await c.env.umeyui_db
+		.prepare('SELECT id FROM users WHERE email = ? AND is_active = 1')
+		.bind(email)
+		.first<{ id: string }>();
+
+	if (!user) return c.json({ error: 'ユーザーが見つかりません' }, 404);
+
+	// パスワード更新 + 全セッション無効化 + トークン削除
+	await c.env.umeyui_db.batch([
+		c.env.umeyui_db
+			.prepare('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?')
+			.bind(token.new_password_hash, user.id),
+		c.env.umeyui_db.prepare('DELETE FROM password_reset_tokens WHERE id = ?').bind(token.id),
+	]);
+
+	return c.json({ message: 'パスワードをリセットしました' });
 });
 
 // POST /auth/change-password

@@ -22,6 +22,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   int _pendingCount = 0;
+  final _calendarKey = GlobalKey<CalendarScreenState>();
+  final _chatListKey = GlobalKey<ChatListScreenState>();
 
   @override
   void initState() {
@@ -70,15 +72,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final auth = context.read<AuthProvider>();
     if (auth.isAdmin) {
       return [
-        const CalendarScreen(),
-        const ChatListScreen(),
+        CalendarScreen(key: _calendarKey),
+        ChatListScreen(key: _chatListKey),
         NotificationsScreen(key: const ValueKey('notifications'), onRefreshed: _loadPendingCount),
         const AdminScreen(),
       ];
     }
     return [
-      const CalendarScreen(),
-      const ChatListScreen(),
+      CalendarScreen(key: _calendarKey),
+      ChatListScreen(key: _chatListKey),
       NotificationsScreen(key: const ValueKey('notifications'), onRefreshed: _loadPendingCount),
       const ProfileScreen(),
     ];
@@ -108,7 +110,8 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
           setState(() => _currentIndex = index);
-          if (index == 1) _loadChatUnread();
+          if (index == 0) _calendarKey.currentState?.loadSlots();
+          if (index == 1) { _loadChatUnread(); _chatListKey.currentState?.loadRooms(); }
           if (index == 2) _loadPendingCount();
         },
         destinations: auth.isAdmin

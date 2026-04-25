@@ -11,10 +11,10 @@ class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
 
   @override
-  State<ChatListScreen> createState() => _ChatListScreenState();
+  State<ChatListScreen> createState() => ChatListScreenState();
 }
 
-class _ChatListScreenState extends State<ChatListScreen> {
+class ChatListScreenState extends State<ChatListScreen> {
   List<ChatRoom> _rooms = [];
   bool _isLoading = true;
   String? _error;
@@ -22,10 +22,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
   @override
   void initState() {
     super.initState();
-    _loadRooms();
+    loadRooms();
   }
 
-  Future<void> _loadRooms() async {
+  Future<void> loadRooms() async {
     setState(() {
       _isLoading = true;
       _error = null;
@@ -52,7 +52,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
       appBar: AppBar(
         title: const Text('チャット'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadRooms),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: loadRooms),
         ],
       ),
       body: _buildBody(),
@@ -68,7 +68,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
           children: [
             Text(_error!, style: const TextStyle(color: Colors.red)),
             const SizedBox(height: 16),
-            ElevatedButton(onPressed: _loadRooms, child: const Text('再読み込み')),
+            ElevatedButton(onPressed: loadRooms, child: const Text('再読み込み')),
           ],
         ),
       );
@@ -83,7 +83,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
       );
     }
     return RefreshIndicator(
-      onRefresh: _loadRooms,
+      onRefresh: loadRooms,
       child: ListView.separated(
         itemCount: _rooms.length,
         separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
@@ -97,7 +97,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
               ),
             );
             // 部屋から戻ったら既読反映のため一覧を再取得
-            if (mounted) _loadRooms();
+            if (mounted) loadRooms();
           },
         ),
       ),
@@ -655,6 +655,7 @@ class _EventSettingsSheetState extends State<_EventSettingsSheet> {
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
   late final TextEditingController _nameCtrl;
+  int? _maxVendors;
   bool _isSavingTime = false;
   bool _isCancelling = false;
 
@@ -664,6 +665,7 @@ class _EventSettingsSheetState extends State<_EventSettingsSheet> {
     _startTime = _parseTime(widget.currentStartTime);
     _endTime = _parseTime(widget.currentEndTime);
     _nameCtrl = TextEditingController(text: widget.currentName ?? '');
+    _maxVendors = widget.room.maxVendors;
   }
 
   @override
@@ -723,6 +725,7 @@ class _EventSettingsSheetState extends State<_EventSettingsSheet> {
         name: newName,
         startTime: _toHHMM(_startTime),
         endTime: _toHHMM(_endTime),
+        maxVendors: _maxVendors,
       );
       widget.onTimeUpdated(_toHHMM(_startTime), _toHHMM(_endTime));
       widget.onNameUpdated(newName);
@@ -832,6 +835,38 @@ class _EventSettingsSheetState extends State<_EventSettingsSheet> {
               ),
             ],
           ),
+          if (widget.isInitiator && widget.room.minVendors != null) ...[
+            const SizedBox(height: 20),
+            const Text('参加人数', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text(
+                  '最低 ${widget.room.minVendors}人（固定）',
+                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                ),
+                const Spacer(),
+                const Text('最大: ', style: TextStyle(fontSize: 13)),
+                IconButton(
+                  icon: const Icon(Icons.remove_circle_outline),
+                  onPressed: (_maxVendors ?? 0) > (widget.room.minVendors ?? 1)
+                      ? () => setState(() => _maxVendors = (_maxVendors ?? 1) - 1)
+                      : null,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 8),
+                Text('${_maxVendors ?? '-'}人', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.add_circle_outline),
+                  onPressed: () => setState(() => _maxVendors = (_maxVendors ?? widget.room.minVendors ?? 1) + 1),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,

@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { requireAuth, requireAdmin } from '../lib/middleware';
+import { confirmSlot } from '../lib/slot_helpers';
 
 export const slotRoutes = new Hono<{ Bindings: Env }>();
 
@@ -177,12 +178,53 @@ slotRoutes.patch('/:id', async (c) => {
 		}
 	}
 
-	const { name, start_time, end_time, description } = await c.req.json();
+	const { name, start_time, end_time, description, min_vendors, max_vendors } = await c.req.json();
+
+	if (min_vendors !== undefined || max_vendors !== undefined) {
+		const slot = await c.env.umeyui_db
+			.prepare('SELECT status FROM slots WHERE id = ?')
+			.bind(id)
+			.first<{ status: string }>();
+
+		if (min_vendors !== undefined && slot?.status !== 'recruiting') {
+			return c.json({ error: '最低人数は募集中のみ変更できます' }, 400);
+		}
+		if (max_vendors !== undefined && slot?.status !== 'recruiting' && slot?.status !== 'confirmed') {
+			return c.json({ error: '最大人数は募集中または開催確定中のみ変更できます' }, 400);
+		}
+
+		const countResult = await c.env.umeyui_db
+			.prepare("SELECT COUNT(*) AS cnt FROM reservations WHERE slot_id = ? AND status != 'cancelled'")
+			.bind(id)
+			.first<{ cnt: number }>();
+		const currentCount = countResult?.cnt ?? 0;
+
+		if (max_vendors !== undefined && max_vendors < currentCount) {
+			return c.json({ error: `最大人数は現在の参加者数（${currentCount}人）以上にしてください` }, 400);
+		}
+
+		// 最低人数を下げた結果、現在の参加者数が最低人数に達した場合は自動確定
+		if (min_vendors !== undefined && slot?.status === 'recruiting' && currentCount >= min_vendors) {
+			await c.env.umeyui_db
+				.prepare('UPDATE slots SET name = ?, start_time = ?, end_time = ?, description = ?, min_vendors = ?, max_vendors = COALESCE(?, max_vendors) WHERE id = ?')
+				.bind(name ?? null, start_time ?? null, end_time ?? null, description ?? null, min_vendors, max_vendors ?? null, id)
+				.run();
+			await confirmSlot(c.env, id);
+			return c.json({ message: '枠情報を更新しました（参加者が最低人数に達したため開催が確定しました）' });
+		}
+	}
 
 	await c.env.umeyui_db
 		.prepare('UPDATE slots SET name = ?, start_time = ?, end_time = ?, description = ? WHERE id = ?')
 		.bind(name ?? null, start_time ?? null, end_time ?? null, description ?? null, id)
 		.run();
+
+	if (min_vendors !== undefined) {
+		await c.env.umeyui_db.prepare('UPDATE slots SET min_vendors = ? WHERE id = ?').bind(min_vendors, id).run();
+	}
+	if (max_vendors !== undefined) {
+		await c.env.umeyui_db.prepare('UPDATE slots SET max_vendors = ? WHERE id = ?').bind(max_vendors, id).run();
+	}
 
 	return c.json({ message: '枠情報を更新しました' });
 });

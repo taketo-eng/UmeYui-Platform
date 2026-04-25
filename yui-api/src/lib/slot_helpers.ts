@@ -8,25 +8,47 @@ export async function confirmSlot(env: Env, slotId: string): Promise<void> {
 		env.umeyui_db.prepare("UPDATE reservations SET status = 'confirmed' WHERE slot_id = ? AND status = 'pending'").bind(slotId),
 		env.umeyui_db.prepare('INSERT INTO chat_rooms (id, slot_id) VALUES (?, ?)').bind(roomId, slotId),
 	]);
-	await sendPushToParticipants(env, slotId, {
+
+	const initiator = await env.umeyui_db
+		.prepare('SELECT u.shop_name FROM users u JOIN reservations r ON u.id = r.user_id WHERE r.slot_id = ? AND r.is_initiator = 1')
+		.bind(slotId)
+		.first<{ shop_name: string | null }>();
+	const initiatorName = initiator?.shop_name ?? '出店者';
+
+	await sendPushToConfirmedParticipants(env, slotId, {
 		title: '開催確定！',
 		body: 'チャットルームが開きました。当日に向けて話し合いましょう！',
 	});
+	await sendPushToNonParticipantAdmins(env, slotId, {
+		title: '開催確定！',
+		body: `${initiatorName}主催のイベントが確定しました！`,
+	});
 }
 
-async function sendPushToParticipants(env: Env, slotId: string, payload: { title: string; body: string }): Promise<void> {
+async function sendPushToConfirmedParticipants(env: Env, slotId: string, payload: { title: string; body: string }): Promise<void> {
 	const { results } = await env.umeyui_db
 		.prepare(
-			`
-      SELECT DISTINCT f.token FROM fcm_tokens f
-      JOIN users u ON f.user_id = u.id
-      LEFT JOIN reservations r ON u.id = r.user_id AND r.slot_id = ?
-      WHERE (r.status = 'confirmed' OR u.role = 'admin')
-    `,
+			`SELECT DISTINCT f.token FROM fcm_tokens f
+       JOIN reservations r ON f.user_id = r.user_id
+       WHERE r.slot_id = ? AND r.status = 'confirmed'`,
 		)
 		.bind(slotId)
 		.all<{ token: string }>();
+	await Promise.all(results.map((r) => sendPushNotification(env, r.token, payload.title, payload.body)));
+}
 
+async function sendPushToNonParticipantAdmins(env: Env, slotId: string, payload: { title: string; body: string }): Promise<void> {
+	const { results } = await env.umeyui_db
+		.prepare(
+			`SELECT DISTINCT f.token FROM fcm_tokens f
+       JOIN users u ON f.user_id = u.id
+       WHERE u.role = 'admin'
+         AND u.id NOT IN (
+           SELECT user_id FROM reservations WHERE slot_id = ? AND status = 'confirmed'
+         )`,
+		)
+		.bind(slotId)
+		.all<{ token: string }>();
 	await Promise.all(results.map((r) => sendPushNotification(env, r.token, payload.title, payload.body)));
 }
 

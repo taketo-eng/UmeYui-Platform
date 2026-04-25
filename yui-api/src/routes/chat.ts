@@ -36,6 +36,8 @@ chatRoutes.get('/', async (c) => {
         s.name AS slot_name,
         s.start_time,
         s.end_time,
+        s.min_vendors,
+        s.max_vendors,
         (SELECT body FROM messages WHERE room_id = cr.id ORDER BY created_at DESC LIMIT 1) AS last_message_body,
         (SELECT created_at FROM messages WHERE room_id = cr.id ORDER BY created_at DESC LIMIT 1) AS last_message_at,
         (SELECT COUNT(*) FROM messages

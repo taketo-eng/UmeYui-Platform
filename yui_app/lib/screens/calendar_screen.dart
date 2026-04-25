@@ -28,10 +28,10 @@ class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
 
   @override
-  State<CalendarScreen> createState() => _CalendarScreenState();
+  State<CalendarScreen> createState() => CalendarScreenState();
 }
 
-class _CalendarScreenState extends State<CalendarScreen> {
+class CalendarScreenState extends State<CalendarScreen> {
   List<Slot> _slots = [];
   String _filter = 'all';
   bool _isLoading = true;
@@ -40,10 +40,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSlots();
+    loadSlots();
   }
 
-  Future<void> _loadSlots() async {
+  Future<void> loadSlots() async {
     setState(() {
       _isLoading = true;
       _error = null;
@@ -81,7 +81,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       appBar: AppBar(
         title: const Text('出店カレンダー'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadSlots),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: loadSlots),
         ],
       ),
       floatingActionButton: auth.isAdmin
@@ -112,7 +112,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             Text(_error!, style: const TextStyle(color: Colors.red)),
             const SizedBox(height: 16),
             ElevatedButton(
-                onPressed: _loadSlots, child: const Text('再読み込み')),
+                onPressed: loadSlots, child: const Text('再読み込み')),
           ],
         ),
       );
@@ -125,12 +125,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
       return const Center(child: Text('出店可能な日程はまだありません'));
     }
     return RefreshIndicator(
-      onRefresh: _loadSlots,
+      onRefresh: loadSlots,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: filtered.length,
         itemBuilder: (context, index) =>
-            _SlotCard(slot: filtered[index], onReserved: _loadSlots, onDeleted: _loadSlots),
+            _SlotCard(slot: filtered[index], onReserved: loadSlots, onDeleted: loadSlots),
       ),
     );
   }
@@ -300,7 +300,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
 
     if (mounted) {
-      _loadSlots();
+      loadSlots();
       final message = errors.isEmpty
           ? '$successCount日分の枠を追加しました'
           : '$successCount日追加（${errors.length}件失敗）';
@@ -609,6 +609,11 @@ class _SlotCard extends StatelessWidget {
                       ),
                     ],
                     _StatusChip(status: slot.status),
+                    // 発起人 + 募集中の場合に編集ボタン
+                    if (slot.isRecruiting && slot.vendors.any((v) => v.userId == myUserId && v.isInitiator)) ...[
+                      const SizedBox(width: 4),
+                      _EditRecruitingButton(slot: slot, onSaved: onReserved),
+                    ],
                     // 管理者 + (募集前 or 発起人) の場合に削除ボタン
                     if (auth.isAdmin && (slot.isOpen || slot.vendors.any((v) => v.userId == myUserId && v.isInitiator))) ...[
                       const SizedBox(width: 4),
@@ -666,6 +671,217 @@ class _SlotCard extends StatelessWidget {
           ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ---- 募集中枠の編集ボタン（発起人のみ） ----
+
+class _EditRecruitingButton extends StatelessWidget {
+  final Slot slot;
+  final VoidCallback onSaved;
+  const _EditRecruitingButton({required this.slot, required this.onSaved});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.edit_outlined, size: 18),
+      style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap, padding: EdgeInsets.zero),
+      tooltip: '編集',
+      onPressed: () async {
+        await showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+          builder: (_) => _EditRecruitingSheet(slot: slot, onSaved: onSaved),
+        );
+      },
+    );
+  }
+}
+
+class _EditRecruitingSheet extends StatefulWidget {
+  final Slot slot;
+  final VoidCallback onSaved;
+  const _EditRecruitingSheet({required this.slot, required this.onSaved});
+
+  @override
+  State<_EditRecruitingSheet> createState() => _EditRecruitingSheetState();
+}
+
+class _EditRecruitingSheetState extends State<_EditRecruitingSheet> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _descCtrl;
+  TimeOfDay? _startTime;
+  TimeOfDay? _endTime;
+  late int _minVendors;
+  late int _maxVendors;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.slot.name ?? '');
+    _descCtrl = TextEditingController(text: widget.slot.description ?? '');
+    _startTime = _parseTime(widget.slot.startTime);
+    _endTime = _parseTime(widget.slot.endTime);
+    _minVendors = widget.slot.minVendors ?? 2;
+    _maxVendors = widget.slot.maxVendors ?? 8;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _descCtrl.dispose();
+    super.dispose();
+  }
+
+  TimeOfDay? _parseTime(String? hhmm) {
+    if (hhmm == null) return null;
+    final parts = hhmm.split(':');
+    if (parts.length != 2) return null;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return null;
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  String _fmt(TimeOfDay? t) {
+    if (t == null) return '未設定';
+    return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  }
+
+  String? _toHHMM(TimeOfDay? t) {
+    if (t == null) return null;
+    return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _pickTime({required bool isStart}) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: (isStart ? _startTime : _endTime) ?? TimeOfDay.now(),
+      builder: (ctx, child) => MediaQuery(
+        data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true),
+        child: child!,
+      ),
+    );
+    if (picked == null) return;
+    setState(() => isStart ? _startTime = picked : _endTime = picked);
+  }
+
+  Future<void> _save() async {
+    if (_minVendors > _maxVendors) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('最低人数は最大人数以下にしてください'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      await apiClient.updateSlot(
+        widget.slot.id,
+        name: _nameCtrl.text.trim().isEmpty ? null : _nameCtrl.text.trim(),
+        startTime: _toHHMM(_startTime),
+        endTime: _toHHMM(_endTime),
+        description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+        minVendors: _minVendors,
+        maxVendors: _maxVendors,
+      );
+      widget.onSaved();
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('保存しました')));
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Widget _stepper(int value, VoidCallback onDec, VoidCallback onInc) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: onDec, padding: EdgeInsets.zero, constraints: const BoxConstraints()),
+        const SizedBox(width: 8),
+        Text('$value人', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        const SizedBox(width: 8),
+        IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: onInc, padding: EdgeInsets.zero, constraints: const BoxConstraints()),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(left: 24, right: 24, top: 24, bottom: MediaQuery.of(context).viewInsets.bottom + 24),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('イベント編集', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _nameCtrl,
+              decoration: const InputDecoration(labelText: '枠名（任意）', hintText: '例：春の梅屋マルシェ', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _descCtrl,
+              maxLines: 3,
+              decoration: const InputDecoration(labelText: '概要（任意）', hintText: '参加者への一言、出店テーマなど', border: OutlineInputBorder(), isDense: true),
+            ),
+            const SizedBox(height: 20),
+            const Text('開催時間帯', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: OutlinedButton.icon(icon: const Icon(Icons.access_time, size: 18), label: Text('開始: ${_fmt(_startTime)}'), onPressed: () => _pickTime(isStart: true))),
+                const SizedBox(width: 12),
+                Expanded(child: OutlinedButton.icon(icon: const Icon(Icons.access_time, size: 18), label: Text('終了: ${_fmt(_endTime)}'), onPressed: () => _pickTime(isStart: false))),
+              ],
+            ),
+            const SizedBox(height: 20),
+            const Text('参加人数', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('最低人数'),
+                _stepper(
+                  _minVendors,
+                  _minVendors > 1 ? () => setState(() => _minVendors--) : () {},
+                  () => setState(() { _minVendors++; if (_minVendors > _maxVendors) _maxVendors = _minVendors; }),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('最大人数'),
+                _stepper(
+                  _maxVendors,
+                  _maxVendors > _minVendors ? () => setState(() => _maxVendors--) : () {},
+                  () => setState(() => _maxVendors++),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isSaving ? null : _save,
+                child: _isSaving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('保存'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

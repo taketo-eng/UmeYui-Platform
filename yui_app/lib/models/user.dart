@@ -5,6 +5,7 @@ class User {
   final String? shopName;
   final String? bio;
   final String? avatarUrl;
+  final String? homepageAvatarUrl;
   final bool isActive;
   final String? websiteUrl;
   final String? instagramUrl;
@@ -19,6 +20,7 @@ class User {
     this.shopName,
     this.bio,
     this.avatarUrl,
+    this.homepageAvatarUrl,
     required this.isActive,
     this.websiteUrl,
     this.instagramUrl,
@@ -34,6 +36,7 @@ class User {
     shopName: json['shop_name'] as String?,
     bio: json['bio'] as String?,
     avatarUrl: json['avatar_url'] as String?,
+    homepageAvatarUrl: json['homepage_avatar_url'] as String?,
     isActive: (json['is_active'] as int) == 1,
     websiteUrl: json['website_url'] as String?,
     instagramUrl: json['instagram_url'] as String?,
