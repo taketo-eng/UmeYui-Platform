@@ -484,18 +484,24 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     controller: _scrollCtrl,
                     padding: const EdgeInsets.all(16),
                     itemCount: _messages.length,
-                    itemBuilder: (context, index) => _MessageBubble(
-                      message: _messages[index],
-                      isMe: _messages[index].userId == myUserId,
-                      onAvatarTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => UserProfileScreen(
-                            userId: _messages[index].userId,
+                    itemBuilder: (context, index) {
+                      final msg = _messages[index];
+                      if (msg.userId == 'system') {
+                        return _SystemMessageBubble(message: msg);
+                      }
+                      return _MessageBubble(
+                        message: msg,
+                        isMe: msg.userId == myUserId,
+                        onAvatarTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UserProfileScreen(
+                              userId: msg.userId,
+                            ),
                           ),
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   ),
           ),
           // 入力欄
@@ -583,6 +589,34 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ---- システムメッセージ ----
+
+class _SystemMessageBubble extends StatelessWidget {
+  final Message message;
+  const _SystemMessageBubble({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            message.body,
+            style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+            textAlign: TextAlign.center,
+          ),
+        ),
       ),
     );
   }
@@ -844,7 +878,7 @@ class _FullscreenImageScreen extends StatelessWidget {
         backgroundDecoration: const BoxDecoration(color: Colors.black),
         minScale: PhotoViewComputedScale.contained,
         maxScale: PhotoViewComputedScale.covered * 3,
-        loadingBuilder: (_, __) => const Center(
+        loadingBuilder: (_, e) => const Center(
           child: CircularProgressIndicator(color: Colors.white),
         ),
         errorBuilder: (context, err, stack) => const Center(

@@ -7,6 +7,7 @@ import { chatRoutes } from './routes/chat'
 import { slotJoinRequestRoutes, joinRequestRoutes } from './routes/join_requests'
 import { notificationRoutes } from './routes/notifications'
 import { publicRoutes } from './routes/public'
+import { sendPushToUser } from './lib/fcm'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -68,4 +69,70 @@ app.get('/homepage-avatars/:filename', async (c) => {
 	return new Response(object.body, { headers })
 })
 
-export default app
+async function scheduledHandler(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext) {
+	// JST = UTC + 9h
+	const nowJst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+	const toJstDate = (offsetDays: number) =>
+		new Date(nowJst.getTime() + offsetDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+	const yesterdayJst = toJstDate(-1);
+	const sevenDaysAgoJst = toJstDate(-7);
+
+	// --- Day +1: 開催翌日 → システムメッセージ送信（未送信のルームのみ） ---
+	const { results: endingSlots } = await env.umeyui_db
+		.prepare(
+			`SELECT s.id, cr.id AS room_id
+       FROM slots s
+       JOIN chat_rooms cr ON cr.slot_id = s.id
+       WHERE s.date = ? AND s.status = 'confirmed'
+       AND NOT EXISTS (
+         SELECT 1 FROM messages WHERE room_id = cr.id AND user_id = 'system'
+       )`,
+		)
+		.bind(yesterdayJst)
+		.all<{ id: string; room_id: string }>();
+
+	for (const slot of endingSlots) {
+		const msgBody = 'ご参加ありがとうございました。このチャットルームは7日後に削除されます。';
+
+		await env.umeyui_db
+			.prepare('INSERT INTO messages (id, room_id, user_id, body) VALUES (?, ?, ?, ?)')
+			.bind(crypto.randomUUID(), slot.room_id, 'system', msgBody)
+			.run();
+
+		const { results: members } = await env.umeyui_db
+			.prepare("SELECT user_id FROM reservations WHERE slot_id = ? AND status = 'confirmed'")
+			.bind(slot.id)
+			.all<{ user_id: string }>();
+
+		await Promise.all(
+			members.map((m) =>
+				sendPushToUser(env, m.user_id, 'チャットルーム', msgBody, { type: 'system_message', room_id: slot.room_id }),
+			),
+		);
+	}
+
+	// --- Day +8: チャットルーム削除（開催から7日以上経過かつルームが残っているもの） ---
+	const { results: expiredSlots } = await env.umeyui_db
+		.prepare(
+			`SELECT s.id AS slot_id, cr.id AS room_id
+       FROM slots s
+       JOIN chat_rooms cr ON cr.slot_id = s.id
+       WHERE s.date <= ? AND s.status = 'confirmed'`,
+		)
+		.bind(sevenDaysAgoJst)
+		.all<{ slot_id: string; room_id: string }>();
+
+	for (const slot of expiredSlots) {
+		await env.umeyui_db.batch([
+			env.umeyui_db.prepare('DELETE FROM user_room_reads WHERE room_id = ?').bind(slot.room_id),
+			env.umeyui_db.prepare('DELETE FROM messages WHERE room_id = ?').bind(slot.room_id),
+			env.umeyui_db.prepare('DELETE FROM chat_rooms WHERE id = ?').bind(slot.room_id),
+		]);
+	}
+}
+
+export default {
+	fetch: app.fetch,
+	scheduled: scheduledHandler,
+}

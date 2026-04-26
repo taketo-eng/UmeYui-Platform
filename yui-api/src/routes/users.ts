@@ -45,7 +45,7 @@ userRoutes.get('/', async (c) => {
 
 	const { results } = await c.env.umeyui_db
 		.prepare(
-			'SELECT id, email, role, shop_name, bio, homepage_bio, category, avatar_url, homepage_avatar_url, website_url, instagram_url, x_url, line_url, facebook_url, is_active, created_at FROM users ORDER BY created_at DESC',
+			"SELECT id, email, role, shop_name, bio, homepage_bio, category, avatar_url, homepage_avatar_url, website_url, instagram_url, x_url, line_url, facebook_url, is_active, created_at FROM users WHERE id != 'system' ORDER BY created_at DESC",
 		)
 		.all();
 
