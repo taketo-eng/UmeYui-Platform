@@ -733,6 +733,8 @@ class _ActionButtons extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
+      isDismissible: false,
+      enableDrag: false,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -955,9 +957,11 @@ class _ActionButtons extends StatelessWidget {
     final codeCtrl = TextEditingController();
     await showDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(
+      barrierDismissible: false,
+      builder: (ctx) {
+        bool loading = false;
+        return StatefulBuilder(
         builder: (ctx, setState) {
-          bool loading = false;
           return AlertDialog(
             title: const Text('確認コードを入力'),
             content: Column(
@@ -1021,7 +1025,8 @@ class _ActionButtons extends StatelessWidget {
             ],
           );
         },
-      ),
+        );
+      },
     );
   }
 }
