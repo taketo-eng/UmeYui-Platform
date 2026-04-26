@@ -74,6 +74,7 @@ authRoutes.post('/login', async (c) => {
 			role: user.role,
 			exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30,
 			tv: user.token_version,
+			is_test: user.email.endsWith('@example.com'),
 		},
 		c.env.JWT_SECRET,
 	);

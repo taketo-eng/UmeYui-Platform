@@ -106,7 +106,7 @@ userRoutes.patch('/:id', async (c) => {
 		.bind(...values)
 		.run();
 
-	if (c.env.VERCEL_DEPLOY_HOOK_URL) {
+	if (!(authUser.is_test ?? false) && c.env.VERCEL_DEPLOY_HOOK_URL) {
 		await fetch(c.env.VERCEL_DEPLOY_HOOK_URL, { method: 'POST' }).catch(() => {});
 	}
 
@@ -262,7 +262,7 @@ userRoutes.post('/:id/avatar', async (c) => {
 
 	await c.env.umeyui_db.prepare('UPDATE users SET avatar_url = ? WHERE id = ?').bind(avatarUrl, id).run();
 
-	if (c.env.VERCEL_DEPLOY_HOOK_URL) {
+	if (!(authUser.is_test ?? false) && c.env.VERCEL_DEPLOY_HOOK_URL) {
 		await fetch(c.env.VERCEL_DEPLOY_HOOK_URL, { method: 'POST' }).catch(() => {});
 	}
 
@@ -310,7 +310,7 @@ userRoutes.post('/:id/homepage-avatar', async (c) => {
 	const homepageAvatarUrl = `/homepage-avatars/${id}.${ext}`;
 	await c.env.umeyui_db.prepare('UPDATE users SET homepage_avatar_url = ? WHERE id = ?').bind(homepageAvatarUrl, id).run();
 
-	if (c.env.VERCEL_DEPLOY_HOOK_URL) {
+	if (!(authUser.is_test ?? false) && c.env.VERCEL_DEPLOY_HOOK_URL) {
 		await fetch(c.env.VERCEL_DEPLOY_HOOK_URL, { method: 'POST' }).catch(() => {});
 	}
 

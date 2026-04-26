@@ -53,10 +53,11 @@ export async function verifyPassword(password: string, stored: string): Promise<
 // ---- JWT ----
 
 export type JwtPayload = {
-	sub: string  // user id
-	role: string // admin or vendor
-	exp: number  // expiration time (unix timestamp)
-	tv: number   // token version（ログアウト時に無効化するために使用）
+	sub: string       // user id
+	role: string      // admin or vendor
+	exp: number       // expiration time (unix timestamp)
+	tv: number        // token version（ログアウト時に無効化するために使用）
+	is_test?: boolean // テストアカウント（@example.com）
 }
 
 export async function createJwt(payload: JwtPayload, secret: string): Promise<string> {

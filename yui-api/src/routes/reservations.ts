@@ -121,10 +121,11 @@ reservationRoutes.post('/:id/reservations', async (c) => {
 			`${slotInfo?.date ?? ''}の枠で出店者の募集が始まりました（最低${min_vendors}人・最大${max_vendors}人）`,
 		);
 
+		const isTest = authUser.is_test ?? false;
 		// min_vendors=1 の場合は発起人1人で即確定（確定通知はconfirmSlot内で送信）
 		if (min_vendors === 1) {
-			await confirmSlot(c.env, slotId);
-		} else {
+			await confirmSlot(c.env, slotId, isTest);
+		} else if (!isTest) {
 			// 2人以上が必要な場合のみ募集開始通知をプッシュ
 			await sendPushToAllActive(
 				c.env,
@@ -187,6 +188,8 @@ reservationRoutes.delete('/:id/reservations', async (c) => {
 
 	const remainingCount = countResult?.count ?? 0;
 
+	const isTest = authUser.is_test ?? false;
+
 	if (remainingCount === 0) {
 		// 全員いなくなった → チャットルーム削除・openに戻してmin/maxをリセット
 		await deleteChatRoom(c.env.umeyui_db, slotId);
@@ -194,7 +197,7 @@ reservationRoutes.delete('/:id/reservations', async (c) => {
 			.prepare("UPDATE slots SET status = 'open', min_vendors = NULL, max_vendors = NULL, name = NULL, start_time = NULL, end_time = NULL WHERE id = ?")
 			.bind(slotId)
 			.run();
-		if (c.env.VERCEL_DEPLOY_HOOK_URL) {
+		if (!isTest && c.env.VERCEL_DEPLOY_HOOK_URL) {
 			await fetch(c.env.VERCEL_DEPLOY_HOOK_URL, { method: 'POST' }).catch(() => {});
 		}
 	} else {
@@ -226,14 +229,14 @@ reservationRoutes.delete('/:id/reservations', async (c) => {
 				c.env.umeyui_db.prepare("UPDATE slots SET status = 'recruiting' WHERE id = ?").bind(slotId),
 				c.env.umeyui_db.prepare("UPDATE reservations SET status = 'pending' WHERE slot_id = ? AND status = 'confirmed'").bind(slotId),
 			]);
-			if (c.env.VERCEL_DEPLOY_HOOK_URL) {
+			if (!isTest && c.env.VERCEL_DEPLOY_HOOK_URL) {
 				await fetch(c.env.VERCEL_DEPLOY_HOOK_URL, { method: 'POST' }).catch(() => {});
 			}
 		}
 	}
 
 	// 他の参加者にプッシュ通知
-	if (otherMembers.length > 0) {
+	if (!isTest && otherMembers.length > 0) {
 		const { title, body } = isInitiator
 			? { title: '開催が中止になりました', body: `発起人（${cancellerName}）が参加を取りやめたため、この枠の開催予定がなくなりました` }
 			: { title: `${cancellerName}がキャンセルしました`, body: '参加者が出店をキャンセルしました。人数をご確認ください' };

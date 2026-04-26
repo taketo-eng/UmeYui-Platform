@@ -1,7 +1,8 @@
 // 枠確定・チャットルーム削除・通知作成の共通処理
 import { sendPushNotification } from './fcm';
 
-export async function confirmSlot(env: Env, slotId: string): Promise<void> {
+
+export async function confirmSlot(env: Env, slotId: string, skipSideEffects = false): Promise<void> {
 	const roomId = crypto.randomUUID();
 	await env.umeyui_db.batch([
 		env.umeyui_db.prepare("UPDATE slots SET status = 'confirmed' WHERE id = ?").bind(slotId),
@@ -15,17 +16,19 @@ export async function confirmSlot(env: Env, slotId: string): Promise<void> {
 		.first<{ shop_name: string | null }>();
 	const initiatorName = initiator?.shop_name ?? '出店者';
 
-	await sendPushToConfirmedParticipants(env, slotId, {
-		title: '開催確定！',
-		body: 'チャットルームが開きました。当日に向けて話し合いましょう！',
-	});
-	await sendPushToNonParticipantAdmins(env, slotId, {
-		title: '開催確定！',
-		body: `${initiatorName}主催のイベントが確定しました！`,
-	});
+	if (!skipSideEffects) {
+		await sendPushToConfirmedParticipants(env, slotId, {
+			title: '開催確定！',
+			body: 'チャットルームが開きました。当日に向けて話し合いましょう！',
+		});
+		await sendPushToNonParticipantAdmins(env, slotId, {
+			title: '開催確定！',
+			body: `${initiatorName}主催のイベントが確定しました！`,
+		});
 
-	if (env.VERCEL_DEPLOY_HOOK_URL) {
-		await fetch(env.VERCEL_DEPLOY_HOOK_URL, { method: 'POST' }).catch(() => {});
+		if (env.VERCEL_DEPLOY_HOOK_URL) {
+			await fetch(env.VERCEL_DEPLOY_HOOK_URL, { method: 'POST' }).catch(() => {});
+		}
 	}
 }
 
