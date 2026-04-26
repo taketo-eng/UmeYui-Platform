@@ -3,12 +3,22 @@ import { sendPushNotification } from './fcm';
 
 
 export async function confirmSlot(env: Env, slotId: string, skipSideEffects = false): Promise<void> {
-	const roomId = crypto.randomUUID();
-	await env.umeyui_db.batch([
+	// 再確定時は既存のチャットルームを再利用し、会話履歴を保持する
+	const existingRoom = await env.umeyui_db
+		.prepare('SELECT id FROM chat_rooms WHERE slot_id = ?')
+		.bind(slotId)
+		.first<{ id: string }>();
+
+	const batchOps: D1PreparedStatement[] = [
 		env.umeyui_db.prepare("UPDATE slots SET status = 'confirmed' WHERE id = ?").bind(slotId),
 		env.umeyui_db.prepare("UPDATE reservations SET status = 'confirmed' WHERE slot_id = ? AND status = 'pending'").bind(slotId),
-		env.umeyui_db.prepare('INSERT INTO chat_rooms (id, slot_id) VALUES (?, ?)').bind(roomId, slotId),
-	]);
+	];
+	if (!existingRoom) {
+		batchOps.push(
+			env.umeyui_db.prepare('INSERT INTO chat_rooms (id, slot_id) VALUES (?, ?)').bind(crypto.randomUUID(), slotId),
+		);
+	}
+	await env.umeyui_db.batch(batchOps);
 
 	const initiator = await env.umeyui_db
 		.prepare('SELECT u.shop_name FROM users u JOIN reservations r ON u.id = r.user_id WHERE r.slot_id = ? AND r.is_initiator = 1')

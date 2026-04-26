@@ -220,10 +220,7 @@ reservationRoutes.delete('/:id/reservations', async (c) => {
 			.first<{ min_vendors: number | null; status: string }>();
 
 		if (slot && slot.min_vendors !== null && remainingCount < slot.min_vendors) {
-			// confirmed → recruiting に戻る場合はチャットルームを削除
-			if (slot.status === 'confirmed') {
-				await deleteChatRoom(c.env.umeyui_db, slotId);
-			}
+			// チャットルームは残す（会話履歴を保持し、再確定時に再利用）
 			// recruiting に戻して全員の予約を pending に
 			await c.env.umeyui_db.batch([
 				c.env.umeyui_db.prepare("UPDATE slots SET status = 'recruiting' WHERE id = ?").bind(slotId),
