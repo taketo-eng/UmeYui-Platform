@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/api_client.dart';
+import '../core/app_snackbar.dart';
 import '../core/auth_provider.dart';
 import '../models/user.dart';
 import 'dart:io';
@@ -42,9 +43,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await auth.refreshUser();
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
+        showAppSnackBar(context, e.message, isError: true);
       }
     } finally {
       if (mounted) setState(() => _isUploadingAvatar = false);
@@ -79,9 +78,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await auth.refreshUser();
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
+        showAppSnackBar(context, e.message, isError: true);
       }
     } finally {
       if (mounted) setState(() => _isUploadingHomepageAvatar = false);
@@ -267,12 +264,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               } on ApiException catch (e) {
                 if (ctx.mounted) {
                   setDialogState(() => isSaving = false);
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    SnackBar(
-                      content: Text(e.message),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
+                  showAppSnackBar(ctx, e.message, isError: true);
                 }
               }
             },
@@ -706,9 +698,7 @@ class _ActionButtons extends StatelessWidget {
                         } on ApiException catch (e) {
                           setState(() => loading = false);
                           if (ctx.mounted) {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-                            );
+                            showAppSnackBar(ctx, e.message, isError: true);
                           }
                         }
                       },
@@ -806,9 +796,7 @@ class _ActionButtons extends StatelessWidget {
                           ? null
                           : () async {
                               if (newEmailCtrl.text.trim() != newEmailConfirmCtrl.text.trim()) {
-                                ScaffoldMessenger.of(ctx).showSnackBar(
-                                  const SnackBar(content: Text('メールアドレスが一致しません'), backgroundColor: Colors.red),
-                                );
+                                showAppSnackBar(ctx, 'メールアドレスが一致しません', isError: true);
                                 return;
                               }
                               setState(() => loading = true);
@@ -819,21 +807,12 @@ class _ActionButtons extends StatelessWidget {
                                 );
                                 if (ctx.mounted) {
                                   Navigator.pop(ctx);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('メールアドレスを変更しました。再ログインしてください。'),
-                                      backgroundColor: Colors.green,
-                                    ),
-                                  );
+                                  showAppSnackBar(context, 'メールアドレスを変更しました。再ログインしてください。');
                                   await context.read<AuthProvider>().logout();
                                 }
                               } on ApiException catch (e) {
                                 setState(() => loading = false);
-                                if (ctx.mounted) {
-                                  ScaffoldMessenger.of(ctx).showSnackBar(
-                                    SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-                                  );
-                                }
+                                if (ctx.mounted) showAppSnackBar(ctx, e.message, isError: true);
                               }
                             },
                       child: loading
@@ -908,12 +887,7 @@ class _ActionButtons extends StatelessWidget {
                     ? null
                     : () async {
                         if (newCtrl.text != confirmCtrl.text) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(
-                            const SnackBar(
-                              content: Text('新しいパスワードが一致しません'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
+                          showAppSnackBar(ctx, '新しいパスワードが一致しません', isError: true);
                           return;
                         }
                         setState(() => loading = true);
@@ -927,14 +901,7 @@ class _ActionButtons extends StatelessWidget {
                           }
                         } on ApiException catch (e) {
                           setState(() => loading = false);
-                          if (ctx.mounted) {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              SnackBar(
-                                content: Text(e.message),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
+                          if (ctx.mounted) showAppSnackBar(ctx, e.message, isError: true);
                         }
                       },
                 child: loading
@@ -1004,14 +971,7 @@ class _ActionButtons extends StatelessWidget {
                           }
                         } on ApiException catch (e) {
                           setState(() => loading = false);
-                          if (ctx.mounted) {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              SnackBar(
-                                content: Text(e.message),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
+                          if (ctx.mounted) showAppSnackBar(ctx, e.message, isError: true);
                         }
                       },
                 child: loading

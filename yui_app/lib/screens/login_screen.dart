@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/api_client.dart';
+import '../core/app_snackbar.dart';
 import '../core/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -40,12 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _isLoading = false);
 
       if (!success && auth.errorMessage != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(auth.errorMessage!),
-            backgroundColor: Colors.red,
-          ),
-        );
+        showAppSnackBar(context, auth.errorMessage!, isError: true);
       }
     }
   }
@@ -299,9 +295,7 @@ class _ForgotPasswordScreenState extends State<_ForgotPasswordScreen> {
       });
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
+        showAppSnackBar(context, e.message, isError: true);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -316,16 +310,12 @@ class _ForgotPasswordScreenState extends State<_ForgotPasswordScreen> {
     try {
       await apiClient.verifyPasswordReset(_emailCtrl.text.trim(), code);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('パスワードをリセットしました。新しいパスワードでログインしてください。')),
-        );
+        showAppSnackBar(context, 'パスワードをリセットしました。新しいパスワードでログインしてください。');
         Navigator.pop(context);
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
+        showAppSnackBar(context, e.message, isError: true);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

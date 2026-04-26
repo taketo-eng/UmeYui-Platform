@@ -1,6 +1,7 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'app_snackbar.dart';
 
 void setupNotificationHandlers(BuildContext context) {
   // パターン1: フォアグラウンド中に届いた通知（flutter_local_notificationsで表示）
@@ -8,18 +9,10 @@ void setupNotificationHandlers(BuildContext context) {
     final notification = message.notification;
     if (notification == null || !context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(notification.title ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-            if (notification.body != null) Text(notification.body!),
-          ],
-        ),
-        duration: const Duration(seconds: 4),
-      ),
+    showAppSnackBar(
+      context,
+      notification.body ?? '',
+      title: notification.title,
     );
   });
 

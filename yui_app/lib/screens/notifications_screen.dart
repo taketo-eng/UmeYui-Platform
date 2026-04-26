@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/api_client.dart';
+import '../core/app_snackbar.dart';
 import '../models/app_notification.dart';
 import '../models/join_request.dart';
 import 'profile_screen.dart';
@@ -234,20 +235,12 @@ class _IncomingCardState extends State<_IncomingCard> {
         responseMessage: responseMessage,
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(action == 'approve' ? '承認しました' : '却下しました'),
-            backgroundColor:
-                action == 'approve' ? Colors.green : Colors.orange,
-          ),
-        );
+        showAppSnackBar(context, action == 'approve' ? '承認しました' : '却下しました');
         widget.onChanged();
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
+        showAppSnackBar(context, e.message, isError: true);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

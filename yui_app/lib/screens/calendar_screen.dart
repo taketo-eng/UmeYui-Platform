@@ -2,6 +2,7 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/api_client.dart';
+import '../core/app_snackbar.dart';
 import '../core/auth_provider.dart';
 import '../models/slot.dart';
 import 'profile_screen.dart';
@@ -304,12 +305,7 @@ class CalendarScreenState extends State<CalendarScreen> {
       final message = errors.isEmpty
           ? '$successCount日分の枠を追加しました'
           : '$successCount日追加（${errors.length}件失敗）';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: errors.isEmpty ? Colors.green : Colors.orange,
-        ),
-      );
+      showAppSnackBar(context, message);
     }
   }
 
@@ -772,9 +768,7 @@ class _EditRecruitingSheetState extends State<_EditRecruitingSheet> {
 
   Future<void> _save() async {
     if (_minVendors > _maxVendors) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('最低人数は最大人数以下にしてください'), backgroundColor: Colors.red),
-      );
+      showAppSnackBar(context, '最低人数は最大人数以下にしてください', isError: true);
       return;
     }
     setState(() => _isSaving = true);
@@ -791,11 +785,11 @@ class _EditRecruitingSheetState extends State<_EditRecruitingSheet> {
       widget.onSaved();
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('保存しました')));
+        showAppSnackBar(context, '保存しました');
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message), backgroundColor: Colors.red));
+        showAppSnackBar(context, e.message, isError: true);
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -928,9 +922,7 @@ class _DeleteSlotButtonState extends State<_DeleteSlotButton> {
       widget.onDeleted?.call();
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
+        showAppSnackBar(context, e.message, isError: true);
       }
     }
   }
@@ -1170,19 +1162,12 @@ class _CancelButtonState extends State<_CancelButton> {
     try {
       await apiClient.cancelReservation(widget.slot.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('キャンセルしました'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+        showAppSnackBar(context, 'キャンセルしました');
         widget.onCancelled();
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
+        showAppSnackBar(context, e.message, isError: true);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -1314,19 +1299,12 @@ class _ReserveButtonState extends State<_ReserveButton> {
     try {
       await apiClient.sendJoinRequest(widget.slot.id, message: message);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('参加申請を送りました。発起人の承認をお待ちください。'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        showAppSnackBar(context, '参加申請を送りました。発起人の承認をお待ちください。');
         widget.onReserved();
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
+        showAppSnackBar(context, e.message, isError: true);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -1592,18 +1570,12 @@ class _ReserveButtonState extends State<_ReserveButton> {
         }
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('出店を申し込みました！'),
-              backgroundColor: Colors.green),
-        );
+        showAppSnackBar(context, '出店を申し込みました！');
         widget.onReserved();
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
+        showAppSnackBar(context, e.message, isError: true);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

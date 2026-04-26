@@ -179,13 +179,6 @@ class _AppRouter extends StatelessWidget {
           ),
           clipBehavior: Clip.antiAlias,
         ),
-        // SnackBar
-        snackBarTheme: SnackBarThemeData(
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
       ),
       debugShowCheckedModeBanner: false,
     );

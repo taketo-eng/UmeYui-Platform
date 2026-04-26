@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/api_client.dart';
+import '../core/app_snackbar.dart';
 import '../core/auth_provider.dart';
 import '../models/user.dart';
 import 'profile_screen.dart';
@@ -171,12 +172,7 @@ class _AdminScreenState extends State<AdminScreen> {
               onPressed: isSaving ? null : () async {
                 if (emailCtrl.text.trim().isEmpty ||
                     passwordCtrl.text.isEmpty) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    const SnackBar(
-                      content: Text('メールアドレスとパスワードは必須です'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
+                  showAppSnackBar(ctx, 'メールアドレスとパスワードは必須です', isError: true);
                   return;
                 }
                 setDialogState(() => isSaving = true);
@@ -188,23 +184,13 @@ class _AdminScreenState extends State<AdminScreen> {
                   );
                   if (ctx.mounted) {
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('アカウントを作成しました'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
+                    showAppSnackBar(context, 'アカウントを作成しました');
                     _loadUsers();
                   }
                 } on ApiException catch (e) {
                   if (ctx.mounted) {
                     setDialogState(() => isSaving = false);
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      SnackBar(
-                        content: Text(e.message),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
+                    showAppSnackBar(ctx, e.message, isError: true);
                   }
                 }
               },
@@ -403,12 +389,7 @@ class _UserDetailSheetState extends State<_UserDetailSheet> {
                   } on ApiException catch (e) {
                     if (mounted) {
                       setState(() => _isTogglingActive = false);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(e.message),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
+                      showAppSnackBar(context, e.message, isError: true);
                     }
                   }
                 },
@@ -534,12 +515,7 @@ class _UserDetailSheetState extends State<_UserDetailSheet> {
               } on ApiException catch (e) {
                 if (ctx.mounted) {
                   setDialogState(() => isSaving = false);
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    SnackBar(
-                      content: Text(e.message),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
+                  showAppSnackBar(ctx, e.message, isError: true);
                 }
               }
             },
@@ -607,12 +583,7 @@ class _UserDetailSheetState extends State<_UserDetailSheet> {
                     ? null
                     : () async {
                         if (newCtrl.text != confirmCtrl.text) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(
-                            const SnackBar(
-                              content: Text('パスワードが一致しません'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
+                          showAppSnackBar(ctx, 'パスワードが一致しません', isError: true);
                           return;
                         }
                         setState(() => loading = true);
@@ -620,23 +591,11 @@ class _UserDetailSheetState extends State<_UserDetailSheet> {
                           await apiClient.adminResetPassword(user.id, newCtrl.text);
                           if (ctx.mounted) {
                             Navigator.pop(ctx);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('パスワードをリセットしました'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
+                            showAppSnackBar(context, 'パスワードをリセットしました');
                           }
                         } on ApiException catch (e) {
                           setState(() => loading = false);
-                          if (ctx.mounted) {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              SnackBar(
-                                content: Text(e.message),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
+                          if (ctx.mounted) showAppSnackBar(ctx, e.message, isError: true);
                         }
                       },
                 child: loading
@@ -706,9 +665,7 @@ class _UserDetailSheetState extends State<_UserDetailSheet> {
                     ? null
                     : () async {
                         if (newEmailCtrl.text.trim() != newEmailConfirmCtrl.text.trim()) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(
-                            const SnackBar(content: Text('メールアドレスが一致しません'), backgroundColor: Colors.red),
-                          );
+                          showAppSnackBar(ctx, 'メールアドレスが一致しません', isError: true);
                           return;
                         }
                         setState(() => loading = true);
@@ -717,20 +674,11 @@ class _UserDetailSheetState extends State<_UserDetailSheet> {
                           if (ctx.mounted) {
                             Navigator.pop(ctx);
                             onChanged();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('メールアドレスを変更しました'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
+                            showAppSnackBar(context, 'メールアドレスを変更しました');
                           }
                         } on ApiException catch (e) {
                           setState(() => loading = false);
-                          if (ctx.mounted) {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-                            );
-                          }
+                          if (ctx.mounted) showAppSnackBar(ctx, e.message, isError: true);
                         }
                       },
                 child: loading
@@ -772,9 +720,7 @@ class _UserDetailSheetState extends State<_UserDetailSheet> {
         onChanged();
       } on ApiException catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-          );
+          showAppSnackBar(context, e.message, isError: true);
         }
       }
     }

@@ -5,6 +5,7 @@ import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/api_client.dart';
+import '../core/app_snackbar.dart';
 import '../core/auth_provider.dart';
 import '../models/chat.dart';
 import '../models/message.dart';
@@ -347,11 +348,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       });
       _scrollToBottom();
     } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
-      }
+      if (mounted) showAppSnackBar(context, e.message, isError: true);
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -755,16 +752,12 @@ class _EventSettingsSheetState extends State<_EventSettingsSheet> {
       widget.onTimeUpdated(_toHHMM(_startTime), _toHHMM(_endTime));
       widget.onNameUpdated(newName);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('保存しました')),
-        );
+        showAppSnackBar(context, '保存しました');
         Navigator.pop(context);
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
+        showAppSnackBar(context, e.message, isError: true);
       }
     } finally {
       if (mounted) setState(() => _isSavingTime = false);
@@ -801,9 +794,7 @@ class _EventSettingsSheetState extends State<_EventSettingsSheet> {
       widget.onEventCancelled();
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
+        showAppSnackBar(context, e.message, isError: true);
       }
     } finally {
       if (mounted) setState(() => _isCancelling = false);
