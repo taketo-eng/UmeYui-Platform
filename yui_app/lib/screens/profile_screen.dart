@@ -996,12 +996,7 @@ class _ActionButtons extends StatelessWidget {
                           await apiClient.verifyPasswordChange(codeCtrl.text.trim());
                           if (ctx.mounted) {
                             Navigator.pop(ctx);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('パスワードを変更しました'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
+                            await context.read<AuthProvider>().logout();
                           }
                         } on ApiException catch (e) {
                           setState(() => loading = false);
