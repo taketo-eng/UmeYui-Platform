@@ -13,6 +13,54 @@ import 'admin_screen.dart';
 import 'notifications_screen.dart';
 import 'package:upgrader/upgrader.dart';
 
+// iTunes APIが trackViewUrl を返さない場合でもApp Storeを開けるようフォールバックURLを保証
+class _IosUpgraderStore extends UpgraderStore {
+  final _inner = UpgraderAppStore();
+
+  @override
+  Future<UpgraderVersionInfo> getVersionInfo({
+    required UpgraderState state,
+    required installedVersion,
+    required String? country,
+    required String? language,
+  }) async {
+    final info = await _inner.getVersionInfo(
+      state: state,
+      installedVersion: installedVersion,
+      country: country,
+      language: language,
+    );
+    if (info.appStoreListingURL != null && info.appStoreListingURL!.isNotEmpty) {
+      return info;
+    }
+    return UpgraderVersionInfo(
+      appStoreListingURL: 'https://apps.apple.com/jp/app/id6762629745',
+      appStoreVersion: info.appStoreVersion,
+      installedVersion: info.installedVersion,
+      isCriticalUpdate: info.isCriticalUpdate,
+      minAppVersion: info.minAppVersion,
+      releaseNotes: info.releaseNotes,
+    );
+  }
+}
+
+class _JaUpgraderMessages extends UpgraderMessages {
+  @override
+  String get title => 'アップデートのお知らせ';
+  @override
+  String get body => '{{appName}} の新しいバージョン（{{currentInstalledVersion}} → {{currentAppStoreVersion}}）が利用可能です。';
+  @override
+  String get buttonTitleUpdate => '今すぐアップデート';
+  @override
+  String get buttonTitleIgnore => '無視する';
+  @override
+  String get buttonTitleLater => '後で';
+  @override
+  String get prompt => 'アップデートしますか？';
+  @override
+  String get releaseNotes => 'リリースノート';
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -107,7 +155,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       body: UpgradeAlert(
-        upgrader: Upgrader(),
+        upgrader: Upgrader(
+          messages: _JaUpgraderMessages(),
+          storeController: UpgraderStoreController(
+            oniOS: () => _IosUpgraderStore(),
+          ),
+        ),
         dialogStyle: UpgradeDialogStyle.cupertino,
         barrierDismissible: false,
         showIgnore: false,
@@ -179,3 +232,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
