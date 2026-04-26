@@ -276,6 +276,10 @@ slotRoutes.post('/:id/cancel-event', async (c) => {
 
 	await c.env.umeyui_db.batch(batchOps);
 
+	if (c.env.VERCEL_DEPLOY_HOOK_URL) {
+		await fetch(c.env.VERCEL_DEPLOY_HOOK_URL, { method: 'POST' }).catch(() => {});
+	}
+
 	return c.json({ message: 'イベントをキャンセルしました' });
 });
 
@@ -328,6 +332,10 @@ slotRoutes.delete('/:id', async (c) => {
 	}
 	await c.env.umeyui_db.batch(batchOps);
 	await c.env.umeyui_db.prepare('DELETE FROM slots WHERE id = ?').bind(id).run();
+
+	if (c.env.VERCEL_DEPLOY_HOOK_URL) {
+		await fetch(c.env.VERCEL_DEPLOY_HOOK_URL, { method: 'POST' }).catch(() => {});
+	}
 
 	return c.json({ message: '枠を削除しました' });
 });

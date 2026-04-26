@@ -194,6 +194,9 @@ reservationRoutes.delete('/:id/reservations', async (c) => {
 			.prepare("UPDATE slots SET status = 'open', min_vendors = NULL, max_vendors = NULL, name = NULL, start_time = NULL, end_time = NULL WHERE id = ?")
 			.bind(slotId)
 			.run();
+		if (c.env.VERCEL_DEPLOY_HOOK_URL) {
+			await fetch(c.env.VERCEL_DEPLOY_HOOK_URL, { method: 'POST' }).catch(() => {});
+		}
 	} else {
 		// 発起人が抜けた場合 → 次の人（古い順）を発起人に
 		if (reservation.is_initiator === 1) {
@@ -223,6 +226,9 @@ reservationRoutes.delete('/:id/reservations', async (c) => {
 				c.env.umeyui_db.prepare("UPDATE slots SET status = 'recruiting' WHERE id = ?").bind(slotId),
 				c.env.umeyui_db.prepare("UPDATE reservations SET status = 'pending' WHERE slot_id = ? AND status = 'confirmed'").bind(slotId),
 			]);
+			if (c.env.VERCEL_DEPLOY_HOOK_URL) {
+				await fetch(c.env.VERCEL_DEPLOY_HOOK_URL, { method: 'POST' }).catch(() => {});
+			}
 		}
 	}
 
