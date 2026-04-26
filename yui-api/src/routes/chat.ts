@@ -248,12 +248,17 @@ chatRoutes.post('/:id/messages', async (c) => {
 		await Promise.all(otherMembers.map((m) => sendPushToUser(c.env, m.user_id, senderName, preview, { type: 'new_chat_message', room_id: id })));
 	}
 
+	const saved = await c.env.umeyui_db
+		.prepare('SELECT created_at FROM messages WHERE id = ?')
+		.bind(messageId)
+		.first<{ created_at: string }>();
+
 	return c.json(
 		{
 			id: messageId,
 			body: body.trim(),
 			user_id: authUser.sub,
-			created_at: new Date().toISOString(),
+			created_at: saved?.created_at ?? new Date().toISOString(),
 		},
 		201,
 	);

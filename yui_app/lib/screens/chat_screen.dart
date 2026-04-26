@@ -284,6 +284,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
+  DateTime _parseCreatedAt(String iso) {
+    final normalized = iso.endsWith('Z') || iso.contains('+') ? iso : '${iso}Z';
+    return DateTime.parse(normalized);
+  }
+
   // 差分のみ取得して追記（IDベースで重複排除）
   Future<void> _pollMessages() async {
     if (!mounted) return;
@@ -302,7 +307,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
       setState(() {
         _messages.addAll(newMsgs);
-        _messages.sort((a, b) => DateTime.parse(a.createdAt).compareTo(DateTime.parse(b.createdAt)));
+        _messages.sort((a, b) => _parseCreatedAt(a.createdAt).compareTo(_parseCreatedAt(b.createdAt)));
       });
       _scrollToBottom();
     } catch (_) {}
@@ -336,7 +341,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         'shop_name': authUser?.shopName,
         'avatar_url': authUser?.avatarUrl,
       });
-      setState(() => _messages.add(msg));
+      setState(() {
+        _messages.add(msg);
+        _messages.sort((a, b) => _parseCreatedAt(a.createdAt).compareTo(_parseCreatedAt(b.createdAt)));
+      });
       _scrollToBottom();
     } on ApiException catch (e) {
       if (mounted) {
