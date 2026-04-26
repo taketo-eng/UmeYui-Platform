@@ -36,6 +36,22 @@ app.get('/avatars/:filename', async (c) => {
 	return new Response(object.body, { headers })
 })
 
+// GET /chat-images/:filename
+// 認証不要: R2 からチャット画像を配信
+app.get('/chat-images/:filename', async (c) => {
+	const { filename } = c.req.param()
+	const object = await c.env.AVATAR_BUCKET.get(`chat-images/${filename}`)
+
+	if (!object) return c.json({ error: 'Not found' }, 404)
+
+	const headers = new Headers()
+	object.writeHttpMetadata(headers)
+	headers.set('etag', object.httpEtag)
+	headers.set('cache-control', 'public, max-age=86400')
+
+	return new Response(object.body, { headers })
+})
+
 // GET /homepage-avatars/:filename
 // 認証不要: R2 からホームページ用プロフィール画像を配信
 app.get('/homepage-avatars/:filename', async (c) => {

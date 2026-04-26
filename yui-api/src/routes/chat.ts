@@ -143,7 +143,7 @@ chatRoutes.get('/:id/messages', async (c) => {
 			.prepare(
 				`
         SELECT
-          m.id, m.body, m.created_at,
+          m.id, m.body, m.image_url, m.created_at,
           u.id AS user_id, u.shop_name, u.avatar_url
         FROM messages m
         JOIN users u ON m.user_id = u.id
@@ -162,7 +162,7 @@ chatRoutes.get('/:id/messages', async (c) => {
 			.prepare(
 				`
         SELECT
-          m.id, m.body, m.created_at,
+          m.id, m.body, m.image_url, m.created_at,
           u.id AS user_id, u.shop_name, u.avatar_url
         FROM messages m
         JOIN users u ON m.user_id = u.id
@@ -203,21 +203,50 @@ chatRoutes.post('/:id/messages', async (c) => {
 		return c.json({ error: 'チャットルームが見つかりません、またはアクセス権がありません' }, 404);
 	}
 
-	const { body } = await c.req.json();
+	const messageId = crypto.randomUUID();
+	let body = '';
+	let imageUrl: string | null = null;
 
-	if (!body || body.trim() === '') {
-		return c.json({ error: 'メッセージを入力してください' }, 400);
+	const contentType = c.req.header('Content-Type') ?? '';
+
+	if (contentType.includes('multipart/form-data')) {
+		const formData = await c.req.formData();
+		body = ((formData.get('body') as string | null) ?? '').trim();
+		const imageFile = formData.get('image') as File | null;
+
+		if (imageFile) {
+			if (!imageFile.type.startsWith('image/')) {
+				return c.json({ error: '画像ファイル（JPEG / PNG / WebP）のみアップロードできます' }, 400);
+			}
+			if (imageFile.size > 10 * 1024 * 1024) {
+				return c.json({ error: 'ファイルサイズは 10MB 以下にしてください' }, 400);
+			}
+			const ext = imageFile.type === 'image/png' ? 'png' : 'jpg';
+			const key = `chat-images/${messageId}.${ext}`;
+			await c.env.AVATAR_BUCKET.put(key, await imageFile.arrayBuffer(), {
+				httpMetadata: { contentType: imageFile.type },
+			});
+			imageUrl = `/${key}`;
+		}
+
+		if (!body && !imageUrl) {
+			return c.json({ error: 'メッセージまたは画像を入力してください' }, 400);
+		}
+	} else {
+		const json = await c.req.json();
+		body = (json.body ?? '').trim();
+		if (!body) {
+			return c.json({ error: 'メッセージを入力してください' }, 400);
+		}
 	}
 
 	if (body.length > 1000) {
 		return c.json({ error: 'メッセージは1000文字以内にしてください' }, 400);
 	}
 
-	const messageId = crypto.randomUUID();
-
 	await c.env.umeyui_db
-		.prepare('INSERT INTO messages (id, room_id, user_id, body) VALUES (?, ?, ?, ?)')
-		.bind(messageId, id, authUser.sub, body.trim())
+		.prepare('INSERT INTO messages (id, room_id, user_id, body, image_url) VALUES (?, ?, ?, ?, ?)')
+		.bind(messageId, id, authUser.sub, body, imageUrl)
 		.run();
 
 	// 送信者の名前を取得
@@ -226,7 +255,8 @@ chatRoutes.post('/:id/messages', async (c) => {
 		.bind(authUser.sub)
 		.first<{ shop_name: string | null }>();
 	const senderName = sender?.shop_name ?? '参加者';
-	const preview = body.trim().length > 40 ? body.trim().substring(0, 40) + '…' : body.trim();
+	const previewText = body || (imageUrl ? '📷 画像' : '');
+	const preview = previewText.length > 40 ? previewText.substring(0, 40) + '…' : previewText;
 
 	// 同じルームの他の参加者にアプリ内通知 + プッシュ通知
 	const { results: otherMembers } = await c.env.umeyui_db
@@ -256,9 +286,10 @@ chatRoutes.post('/:id/messages', async (c) => {
 	return c.json(
 		{
 			id: messageId,
-			body: body.trim(),
+			body,
 			user_id: authUser.sub,
 			created_at: saved?.created_at ?? new Date().toISOString(),
+			image_url: imageUrl,
 		},
 		201,
 	);

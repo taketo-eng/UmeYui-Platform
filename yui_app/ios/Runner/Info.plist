@@ -41,6 +41,8 @@
 	<string>プロフィールアイコンの撮影に使用します。</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>プロフィールアイコンに使用する画像を選択するために、フォトライブラリへのアクセスが必要です。</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>チャットで受け取った画像をフォトライブラリに保存するために使用します。</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

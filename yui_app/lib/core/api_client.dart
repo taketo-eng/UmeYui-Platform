@@ -389,7 +389,31 @@ class ApiClient {
     return await get('/chat-rooms/$roomId/messages$query');
   }
 
-  Future<Map<String, dynamic>> sendMessage(String roomId, String body) async {
+  Future<Map<String, dynamic>> sendMessage(
+    String roomId,
+    String body, {
+    File? imageFile,
+  }) async {
+    if (imageFile != null) {
+      final token = await getToken();
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$_baseUrl/chat-rooms/$roomId/messages'),
+      );
+      if (token != null) request.headers['Authorization'] = 'Bearer $token';
+      if (body.isNotEmpty) request.fields['body'] = body;
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'image',
+          imageFile.path,
+          contentType: MediaType.parse('image/jpeg'),
+        ),
+      );
+      final streamed = await request.send();
+      final res = await http.Response.fromStream(streamed);
+      _checkStatus(res);
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    }
     return await post('/chat-rooms/$roomId/messages', {'body': body});
   }
 }

@@ -1,7 +1,13 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter_linkify/flutter_linkify.dart';
+import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:photo_view/photo_view.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/api_client.dart';
@@ -10,6 +16,8 @@ import '../core/auth_provider.dart';
 import '../models/chat.dart';
 import '../models/message.dart';
 import 'profile_screen.dart';
+
+const _imageExpireDays = 60;
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -238,6 +246,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   String? _startTime;
   String? _endTime;
   String? _slotName;
+  File? _pendingImage;
 
   @override
   void initState() {
@@ -285,6 +294,23 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
+  Future<void> _pickImage() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (picked == null || !mounted) return;
+    final outPath = '${Directory.systemTemp.path}/chat_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final compressed = await FlutterImageCompress.compressAndGetFile(
+      picked.path,
+      outPath,
+      quality: 70,
+      minWidth: 1080,
+      minHeight: 1080,
+      format: CompressFormat.jpeg,
+    );
+    if (compressed != null && mounted) {
+      setState(() => _pendingImage = File(compressed.path));
+    }
+  }
+
   DateTime _parseCreatedAt(String iso) {
     final normalized = iso.endsWith('Z') || iso.contains('+') ? iso : '${iso}Z';
     return DateTime.parse(normalized);
@@ -328,15 +354,20 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
   Future<void> _send() async {
     final text = _inputCtrl.text.trim();
-    if (text.isEmpty) return;
+    final image = _pendingImage;
+    if (text.isEmpty && image == null) return;
 
-    setState(() => _isSending = true);
+    setState(() { _isSending = true; _pendingImage = null; });
     _inputCtrl.clear();
 
     final authUser = context.read<AuthProvider>().user;
 
     try {
-      final data = await apiClient.sendMessage(widget.room.roomId, text);
+      final data = await apiClient.sendMessage(
+        widget.room.roomId,
+        text,
+        imageFile: image,
+      );
       final msg = Message.fromJson({
         ...data,
         'shop_name': authUser?.shopName,
@@ -473,37 +504,79 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               color: Theme.of(context).colorScheme.surface,
               border: Border(top: BorderSide(color: Colors.grey[300]!)),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: SafeArea(
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _inputCtrl,
-                      maxLines: null,
-                      textInputAction: TextInputAction.newline,
-                      decoration: const InputDecoration(
-                        hintText: 'メッセージを入力',
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
+                  // 画像プレビュー
+                  if (_pendingImage != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                      child: Stack(
+                        alignment: Alignment.topRight,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(
+                              _pendingImage!,
+                              height: 100,
+                              width: 100,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => setState(() => _pendingImage = null),
+                            child: Container(
+                              decoration: const BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
+                              ),
+                              padding: const EdgeInsets.all(2),
+                              child: const Icon(Icons.close, size: 16, color: Colors.white),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                  IconButton(
-                    icon: _isSending
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Icon(
-                            Icons.send,
+                  // テキスト入力行
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            Icons.image_outlined,
                             color: Theme.of(context).colorScheme.primary,
                           ),
-                    onPressed: _isSending ? null : _send,
+                          onPressed: _isSending ? null : _pickImage,
+                        ),
+                        Expanded(
+                          child: TextField(
+                            controller: _inputCtrl,
+                            maxLines: null,
+                            textInputAction: TextInputAction.newline,
+                            decoration: const InputDecoration(
+                              hintText: 'メッセージを入力',
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: _isSending
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : Icon(
+                                  Icons.send,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                          onPressed: _isSending ? null : _send,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -528,35 +601,115 @@ class _MessageBubble extends StatelessWidget {
     required this.onAvatarTap,
   });
 
+  bool get _isImageExpired {
+    if (message.imageUrl == null) return false;
+    try {
+      final normalized = message.createdAt.endsWith('Z') || message.createdAt.contains('+')
+          ? message.createdAt
+          : '${message.createdAt}Z';
+      return DateTime.now().difference(DateTime.parse(normalized)).inDays >= _imageExpireDays;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Widget _buildImageContent(BuildContext context) {
+    if (_isImageExpired) {
+      return Container(
+        width: 180,
+        height: 120,
+        decoration: BoxDecoration(
+          color: Colors.grey[300],
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.image_not_supported_outlined, color: Colors.grey[500], size: 28),
+            const SizedBox(height: 4),
+            Text(
+              '保存期限が過ぎました',
+              style: TextStyle(color: Colors.grey[600], fontSize: 11),
+            ),
+          ],
+        ),
+      );
+    }
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => _FullscreenImageScreen(
+            imageUrl: resolveUrl(message.imageUrl!),
+          ),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(
+          resolveUrl(message.imageUrl!),
+          width: 200,
+          fit: BoxFit.cover,
+          loadingBuilder: (_, child, progress) => progress == null
+              ? child
+              : SizedBox(
+                  width: 200,
+                  height: 140,
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      value: progress.expectedTotalBytes != null
+                          ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                          : null,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                ),
+          errorBuilder: (context, err, stack) => Container(
+            width: 200,
+            height: 120,
+            color: Colors.grey[200],
+            child: const Icon(Icons.broken_image_outlined, color: Colors.grey),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final hasImage = message.imageUrl != null;
+    final hasText = message.body.isNotEmpty;
 
     if (isMe) {
-      // 自分のメッセージ: 右寄せ
       return Padding(
         padding: const EdgeInsets.only(bottom: 8, left: 64),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                  bottomLeft: Radius.circular(16),
-                  bottomRight: Radius.circular(4),
+            if (hasImage) ...[
+              _buildImageContent(context),
+              const SizedBox(height: 4),
+            ],
+            if (hasText)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
+                    bottomLeft: Radius.circular(16),
+                    bottomRight: Radius.circular(4),
+                  ),
+                ),
+                child: Linkify(
+                  text: message.body,
+                  style: const TextStyle(color: Colors.white),
+                  linkStyle: const TextStyle(color: Colors.white, decoration: TextDecoration.underline),
+                  onOpen: (link) => launchUrl(Uri.parse(link.url), mode: LaunchMode.externalApplication),
                 ),
               ),
-              child: Linkify(
-                text: message.body,
-                style: const TextStyle(color: Colors.white),
-                linkStyle: const TextStyle(color: Colors.white, decoration: TextDecoration.underline),
-                onOpen: (link) => launchUrl(Uri.parse(link.url), mode: LaunchMode.externalApplication),
-              ),
-            ),
             const SizedBox(height: 2),
             Text(
               _formatTime(message.createdAt),
@@ -567,7 +720,7 @@ class _MessageBubble extends StatelessWidget {
       );
     }
 
-    // 他人のメッセージ: 左寄せ（アイコン・名前付き）
+    // 他人のメッセージ
     return Padding(
       padding: const EdgeInsets.only(bottom: 8, right: 64),
       child: Row(
@@ -599,26 +752,28 @@ class _MessageBubble extends StatelessWidget {
                   style: const TextStyle(fontSize: 11, color: Colors.grey),
                 ),
                 const SizedBox(height: 2),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(4),
-                      topRight: Radius.circular(16),
-                      bottomLeft: Radius.circular(16),
-                      bottomRight: Radius.circular(16),
+                if (hasImage) ...[
+                  _buildImageContent(context),
+                  const SizedBox(height: 4),
+                ],
+                if (hasText)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(4),
+                        topRight: Radius.circular(16),
+                        bottomLeft: Radius.circular(16),
+                        bottomRight: Radius.circular(16),
+                      ),
+                    ),
+                    child: Linkify(
+                      text: message.body,
+                      linkStyle: const TextStyle(color: Colors.blue, decoration: TextDecoration.underline),
+                      onOpen: (link) => launchUrl(Uri.parse(link.url), mode: LaunchMode.externalApplication),
                     ),
                   ),
-                  child: Linkify(
-                    text: message.body,
-                    linkStyle: const TextStyle(color: Colors.blue, decoration: TextDecoration.underline),
-                    onOpen: (link) => launchUrl(Uri.parse(link.url), mode: LaunchMode.externalApplication),
-                  ),
-                ),
                 const SizedBox(height: 2),
                 Text(
                   _formatTime(message.createdAt),
@@ -634,7 +789,6 @@ class _MessageBubble extends StatelessWidget {
 
   String _formatTime(String iso) {
     try {
-      // SQLiteのCURRENT_TIMESTAMPはUTCだがZサフィックスがないためUTCとして扱う
       final normalized = iso.endsWith('Z') || iso.contains('+') ? iso : '${iso}Z';
       final dt = DateTime.parse(normalized).toLocal();
       final h = dt.hour.toString().padLeft(2, '0');
@@ -643,6 +797,61 @@ class _MessageBubble extends StatelessWidget {
     } catch (_) {
       return '';
     }
+  }
+}
+
+// ---- フルスクリーン画像ビューワー ----
+
+class _FullscreenImageScreen extends StatelessWidget {
+  final String imageUrl;
+
+  const _FullscreenImageScreen({required this.imageUrl});
+
+  Future<void> _saveImage(BuildContext context) async {
+    try {
+      final response = await http.get(Uri.parse(imageUrl));
+      final result = await ImageGallerySaver.saveImage(
+        response.bodyBytes,
+        name: 'yui_chat_${DateTime.now().millisecondsSinceEpoch}',
+      );
+      if (context.mounted) {
+        final saved = result['isSuccess'] == true;
+        showAppSnackBar(context, saved ? '画像を保存しました' : '保存に失敗しました', isError: !saved);
+      }
+    } catch (_) {
+      if (context.mounted) showAppSnackBar(context, '保存に失敗しました', isError: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download_outlined),
+            tooltip: '保存',
+            onPressed: () => _saveImage(context),
+          ),
+        ],
+      ),
+      body: PhotoView(
+        imageProvider: NetworkImage(imageUrl),
+        backgroundDecoration: const BoxDecoration(color: Colors.black),
+        minScale: PhotoViewComputedScale.contained,
+        maxScale: PhotoViewComputedScale.covered * 3,
+        loadingBuilder: (_, __) => const Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        ),
+        errorBuilder: (context, err, stack) => const Center(
+          child: Icon(Icons.broken_image_outlined, color: Colors.white54, size: 48),
+        ),
+      ),
+    );
   }
 }
 
