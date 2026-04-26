@@ -245,7 +245,7 @@ chatRoutes.post('/:id/messages', async (c) => {
 		);
 		await c.env.umeyui_db.batch(notifBatch);
 
-		await Promise.all(otherMembers.map((m) => sendPushToUser(c.env, m.user_id, senderName, preview)));
+		await Promise.all(otherMembers.map((m) => sendPushToUser(c.env, m.user_id, senderName, preview, { type: 'new_chat_message', room_id: id })));
 	}
 
 	return c.json(

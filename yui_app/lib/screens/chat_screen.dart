@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../core/api_client.dart';
 import '../core/auth_provider.dart';
 import '../models/chat.dart';
@@ -230,6 +233,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   bool _isLoadingMessages = true;
   bool _isSending = false;
   Timer? _pollTimer;
+  StreamSubscription<RemoteMessage>? _fcmSubscription;
   String? _startTime;
   String? _endTime;
   String? _slotName;
@@ -242,14 +246,21 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     _slotName = widget.room.slotName;
     _loadMessages();
     _pollTimer = Timer.periodic(
-      const Duration(seconds: 5),
+      const Duration(minutes: 2),
       (_) => _pollMessages(),
     );
+    _fcmSubscription = FirebaseMessaging.onMessage.listen((message) {
+      if (message.data['type'] == 'new_chat_message' &&
+          message.data['room_id'] == widget.room.roomId) {
+        _pollMessages();
+      }
+    });
   }
 
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _fcmSubscription?.cancel();
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -291,7 +302,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
       setState(() {
         _messages.addAll(newMsgs);
-        _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        _messages.sort((a, b) => DateTime.parse(a.createdAt).compareTo(DateTime.parse(b.createdAt)));
       });
       _scrollToBottom();
     } catch (_) {}
@@ -534,9 +545,11 @@ class _MessageBubble extends StatelessWidget {
                   bottomRight: Radius.circular(4),
                 ),
               ),
-              child: Text(
-                message.body,
+              child: Linkify(
+                text: message.body,
                 style: const TextStyle(color: Colors.white),
+                linkStyle: const TextStyle(color: Colors.white, decoration: TextDecoration.underline),
+                onOpen: (link) => launchUrl(Uri.parse(link.url), mode: LaunchMode.externalApplication),
               ),
             ),
             const SizedBox(height: 2),
@@ -595,7 +608,11 @@ class _MessageBubble extends StatelessWidget {
                       bottomRight: Radius.circular(16),
                     ),
                   ),
-                  child: Text(message.body),
+                  child: Linkify(
+                    text: message.body,
+                    linkStyle: const TextStyle(color: Colors.blue, decoration: TextDecoration.underline),
+                    onOpen: (link) => launchUrl(Uri.parse(link.url), mode: LaunchMode.externalApplication),
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
