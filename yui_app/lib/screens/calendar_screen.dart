@@ -657,7 +657,7 @@ class _SlotCard extends StatelessWidget {
             ],
 
             // 予約ボタン（未参加・出店者のみ）
-            if (!auth.isAdmin && !isJoined && (slot.isOpen || slot.isRecruiting))
+            if (!auth.isAdmin && !isJoined && (slot.isOpen || slot.isRecruiting || (slot.isConfirmed && slot.currentCount < (slot.maxVendors ?? 0))))
               _ReserveButton(slot: slot, onReserved: onReserved),
 
             // キャンセルボタン（参加中・募集中または開催確定）
