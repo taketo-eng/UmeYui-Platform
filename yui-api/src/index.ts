@@ -8,6 +8,7 @@ import { slotJoinRequestRoutes, joinRequestRoutes } from './routes/join_requests
 import { notificationRoutes } from './routes/notifications'
 import { publicRoutes } from './routes/public'
 import { sendPushToUser } from './lib/fcm'
+import { requireAuth } from './lib/middleware'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -38,8 +39,11 @@ app.get('/avatars/:filename', async (c) => {
 })
 
 // GET /chat-images/:filename
-// 認証不要: R2 からチャット画像を配信
+// 要認証: R2 からチャット画像を配信（アプリ内限定）
 app.get('/chat-images/:filename', async (c) => {
+	const user = await requireAuth(c)
+	if (!user) return c.res
+
 	const { filename } = c.req.param()
 	const object = await c.env.AVATAR_BUCKET.get(`chat-images/${filename}`)
 
@@ -48,7 +52,7 @@ app.get('/chat-images/:filename', async (c) => {
 	const headers = new Headers()
 	object.writeHttpMetadata(headers)
 	headers.set('etag', object.httpEtag)
-	headers.set('cache-control', 'public, max-age=86400')
+	headers.set('cache-control', 'private, max-age=86400')
 
 	return new Response(object.body, { headers })
 })

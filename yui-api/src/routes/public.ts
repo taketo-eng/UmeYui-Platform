@@ -26,10 +26,19 @@ publicRoutes.use(
 	cors({
 		origin: (origin) => (ALLOWED_ORIGINS.includes(origin) ? origin : null),
 		allowMethods: ['GET', 'OPTIONS'],
-		allowHeaders: ['Content-Type'],
+		allowHeaders: ['Content-Type', 'X-API-Key'],
 		maxAge: 86400,
 	}),
 );
+
+publicRoutes.use('*', async (c, next) => {
+	if (c.req.method === 'OPTIONS') return await next();
+	const apiKey = c.req.header('X-API-Key');
+	if (!apiKey || apiKey !== c.env.ASTRO_API_KEY) {
+		return c.json({ error: 'Unauthorized' }, 401);
+	}
+	await next();
+});
 
 publicRoutes.use('*', async (c, next) => {
 	const ip = c.req.header('CF-Connecting-IP') ?? 'unknown';

@@ -247,6 +247,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   String? _endTime;
   String? _slotName;
   File? _pendingImage;
+  Map<String, String> _authHeaders = {};
 
   @override
   void initState() {
@@ -254,6 +255,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     _startTime = widget.room.startTime;
     _endTime = widget.room.endTime;
     _slotName = widget.room.slotName;
+    apiClient.getToken().then((token) {
+      if (token != null && mounted) {
+        setState(() => _authHeaders = {'Authorization': 'Bearer $token'});
+      }
+    });
     _loadMessages();
     _pollTimer = Timer.periodic(
       const Duration(minutes: 2),
@@ -492,6 +498,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       return _MessageBubble(
                         message: msg,
                         isMe: msg.userId == myUserId,
+                        authHeaders: _authHeaders,
                         onAvatarTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -628,11 +635,13 @@ class _MessageBubble extends StatelessWidget {
   final Message message;
   final bool isMe;
   final VoidCallback onAvatarTap;
+  final Map<String, String> authHeaders;
 
   const _MessageBubble({
     required this.message,
     required this.isMe,
     required this.onAvatarTap,
+    required this.authHeaders,
   });
 
   bool get _isImageExpired {
@@ -675,6 +684,7 @@ class _MessageBubble extends StatelessWidget {
         MaterialPageRoute(
           builder: (_) => _FullscreenImageScreen(
             imageUrl: resolveUrl(message.imageUrl!),
+            authHeaders: authHeaders,
           ),
         ),
       ),
@@ -682,6 +692,7 @@ class _MessageBubble extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         child: Image.network(
           resolveUrl(message.imageUrl!),
+          headers: authHeaders,
           width: 200,
           fit: BoxFit.cover,
           loadingBuilder: (_, child, progress) => progress == null
@@ -838,12 +849,16 @@ class _MessageBubble extends StatelessWidget {
 
 class _FullscreenImageScreen extends StatelessWidget {
   final String imageUrl;
+  final Map<String, String> authHeaders;
 
-  const _FullscreenImageScreen({required this.imageUrl});
+  const _FullscreenImageScreen({
+    required this.imageUrl,
+    required this.authHeaders,
+  });
 
   Future<void> _saveImage(BuildContext context) async {
     try {
-      final response = await http.get(Uri.parse(imageUrl));
+      final response = await http.get(Uri.parse(imageUrl), headers: authHeaders);
       final result = await ImageGallerySaver.saveImage(
         response.bodyBytes,
         name: 'yui_chat_${DateTime.now().millisecondsSinceEpoch}',
@@ -874,7 +889,7 @@ class _FullscreenImageScreen extends StatelessWidget {
         ],
       ),
       body: PhotoView(
-        imageProvider: NetworkImage(imageUrl),
+        imageProvider: NetworkImage(imageUrl, headers: authHeaders),
         backgroundDecoration: const BoxDecoration(color: Colors.black),
         minScale: PhotoViewComputedScale.contained,
         maxScale: PhotoViewComputedScale.covered * 3,
