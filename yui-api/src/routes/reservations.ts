@@ -106,11 +106,16 @@ reservationRoutes.post('/:id/reservations', async (c) => {
 				.bind(min_vendors, max_vendors, slotId),
 		]);
 
-		// 枠の日付を取得
+		// 枠の日付と発起人の屋号を取得
 		const slotInfo = await c.env.umeyui_db
 			.prepare('SELECT date FROM slots WHERE id = ?')
 			.bind(slotId)
 			.first<{ date: string }>();
+		const selfUser = await c.env.umeyui_db
+			.prepare('SELECT shop_name FROM users WHERE id = ?')
+			.bind(authUser.sub)
+			.first<{ shop_name: string | null }>();
+		const initiatorName = selfUser?.shop_name ?? '出店者';
 
 		// 全出店者にアプリ内通知
 		await createNotificationsForAllVendors(
@@ -118,7 +123,7 @@ reservationRoutes.post('/:id/reservations', async (c) => {
 			authUser.sub,
 			'recruitment_started',
 			slotId,
-			`${slotInfo?.date ?? ''}の枠で出店者の募集が始まりました（最低${min_vendors}人・最大${max_vendors}人）`,
+			`${initiatorName}さんが${slotInfo?.date ?? ''}の枠で募集を開始しました（最低${min_vendors}人）`,
 		);
 
 		const isTest = authUser.is_test ?? false;
@@ -126,12 +131,11 @@ reservationRoutes.post('/:id/reservations', async (c) => {
 		if (min_vendors === 1) {
 			await confirmSlot(c.env, slotId, isTest);
 		} else if (!isTest) {
-			// 2人以上が必要な場合のみ募集開始通知をプッシュ
 			await sendPushToAllActive(
 				c.env,
 				authUser.sub,
 				'出店枠の募集が始まりました',
-				`${slotInfo?.date ?? ''}の枠で出店者の募集が始まりました（最低${min_vendors}人）`,
+				`${initiatorName}さんが${slotInfo?.date ?? ''}の枠で募集を開始しました（最低${min_vendors}人）`,
 			);
 		}
 

@@ -27,14 +27,30 @@ export async function confirmSlot(env: Env, slotId: string, skipSideEffects = fa
 	const initiatorName = initiator?.shop_name ?? '出店者';
 
 	if (!skipSideEffects) {
+		const confirmMsg = `${initiatorName}さん主催のイベントが確定しました！チャットルームが開きました。`;
+
 		await sendPushToConfirmedParticipants(env, slotId, {
 			title: '開催確定！',
-			body: 'チャットルームが開きました。当日に向けて話し合いましょう！',
+			body: confirmMsg,
 		});
 		await sendPushToNonParticipantAdmins(env, slotId, {
 			title: '開催確定！',
-			body: `${initiatorName}主催のイベントが確定しました！`,
+			body: confirmMsg,
 		});
+
+		// 参加者全員にアプリ内通知
+		const { results: participants } = await env.umeyui_db
+			.prepare("SELECT user_id FROM reservations WHERE slot_id = ? AND status = 'confirmed'")
+			.bind(slotId)
+			.all<{ user_id: string }>();
+		const notifStmts = participants.map(({ user_id }) =>
+			env.umeyui_db
+				.prepare('INSERT INTO notifications (id, user_id, type, slot_id, message) VALUES (?, ?, ?, ?, ?)')
+				.bind(crypto.randomUUID(), user_id, 'slot_confirmed', slotId, confirmMsg),
+		);
+		for (let i = 0; i < notifStmts.length; i += 100) {
+			await env.umeyui_db.batch(notifStmts.slice(i, i + 100));
+		}
 
 		if (env.VERCEL_DEPLOY_HOOK_URL) {
 			await fetch(env.VERCEL_DEPLOY_HOOK_URL, { method: 'POST' }).catch(() => {});

@@ -563,6 +563,15 @@ class _SlotCard extends StatelessWidget {
                           ),
                         ),
                       ],
+                      if (slot.isRecruiting && slot.vendors.any((v) => v.isInitiator)) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          '${slot.vendors.firstWhere((v) => v.isInitiator).shopName ?? '出店者'}さんが募集を開始しています',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: const Color(0xFFE07B00),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -1222,6 +1231,7 @@ class _ReserveButtonState extends State<_ReserveButton> {
         await _doReserve(
           minVendors: settings.minVendors,
           maxVendors: settings.maxVendors,
+          name: settings.name,
           startTime: settings.startTime,
           endTime: settings.endTime,
           description: settings.description,
@@ -1317,6 +1327,7 @@ class _ReserveButtonState extends State<_ReserveButton> {
     int maxVendors = 8;
     TimeOfDay? startTime;
     TimeOfDay? endTime;
+    final nameCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     bool isConfirming = false;
 
@@ -1332,6 +1343,16 @@ class _ReserveButtonState extends State<_ReserveButton> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // イベント名（任意）
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'イベント名（任意）',
+                    hintText: '例：春の梅屋マルシェ',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 // 最低人数
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1497,6 +1518,8 @@ class _ReserveButtonState extends State<_ReserveButton> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         _ConfirmRow('開催日', widget.slot.date),
+                        if (nameCtrl.text.trim().isNotEmpty)
+                          _ConfirmRow('イベント名', nameCtrl.text.trim()),
                         _ConfirmRow('最低人数', '$minVendors人'),
                         _ConfirmRow('最大人数', '$maxVendors人'),
                         _ConfirmRow('希望時間', timeStr),
@@ -1526,6 +1549,9 @@ class _ReserveButtonState extends State<_ReserveButton> {
                     _InitiatorSettings(
                       minVendors: minVendors,
                       maxVendors: maxVendors,
+                      name: nameCtrl.text.trim().isEmpty
+                          ? null
+                          : nameCtrl.text.trim(),
                       startTime: startTime != null
                           ? _formatTime(startTime!)
                           : null,
@@ -1549,6 +1575,7 @@ class _ReserveButtonState extends State<_ReserveButton> {
   Future<void> _doReserve({
     int? minVendors,
     int? maxVendors,
+    String? name,
     String? startTime,
     String? endTime,
     String? description,
@@ -1560,11 +1587,11 @@ class _ReserveButtonState extends State<_ReserveButton> {
         minVendors: minVendors,
         maxVendors: maxVendors,
       );
-      // 時間・説明が設定されている場合はスロットも更新
-      if (startTime != null || endTime != null || description != null) {
+      // イベント名・時間・説明が設定されている場合はスロットも更新
+      if (name != null || startTime != null || endTime != null || description != null) {
         try {
           await apiClient.updateSlot(widget.slot.id,
-              startTime: startTime, endTime: endTime, description: description);
+              name: name, startTime: startTime, endTime: endTime, description: description);
         } catch (_) {
           // スロット更新失敗は無視（予約自体は成功しているため）
         }
