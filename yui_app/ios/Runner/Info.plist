@@ -30,6 +30,7 @@
 	<array>
 		<string>https</string>
 		<string>http</string>
+		<string>itms-apps</string>
 		<string>instagram</string>
 		<string>twitter</string>
 		<string>line</string>
