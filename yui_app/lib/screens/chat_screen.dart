@@ -246,7 +246,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   String? _startTime;
   String? _endTime;
   String? _slotName;
-  File? _pendingImage;
   Map<String, String> _authHeaders = {};
 
   @override
@@ -301,19 +300,63 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   }
 
   Future<void> _pickImage() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (picked == null || !mounted) return;
-    final outPath = '${Directory.systemTemp.path}/chat_${DateTime.now().millisecondsSinceEpoch}.jpg';
-    final compressed = await FlutterImageCompress.compressAndGetFile(
-      picked.path,
-      outPath,
-      quality: 70,
-      minWidth: 1080,
-      minHeight: 1080,
-      format: CompressFormat.jpeg,
+    final picked = await ImagePicker().pickMultiImage();
+    if (picked.isEmpty || !mounted) return;
+
+    final List<File> compressed = [];
+    for (int i = 0; i < picked.length; i++) {
+      final outPath = '${Directory.systemTemp.path}/chat_${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
+      final result = await FlutterImageCompress.compressAndGetFile(
+        picked[i].path,
+        outPath,
+        quality: 70,
+        minWidth: 1080,
+        minHeight: 1080,
+        format: CompressFormat.jpeg,
+      );
+      if (result != null) compressed.add(File(result.path));
+    }
+
+    if (compressed.isEmpty || !mounted) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _ImagePreviewScreen(
+          images: compressed,
+          onSend: _sendImages,
+        ),
+      ),
     );
-    if (compressed != null && mounted) {
-      setState(() => _pendingImage = File(compressed.path));
+  }
+
+  Future<void> _sendImages(List<File> images) async {
+    final authUser = context.read<AuthProvider>().user;
+    setState(() => _isSending = true);
+    try {
+      for (final image in images) {
+        final data = await apiClient.sendMessage(
+          widget.room.roomId,
+          '',
+          imageFile: image,
+        );
+        final msg = Message.fromJson({
+          ...data,
+          'shop_name': authUser?.shopName,
+          'avatar_url': authUser?.avatarUrl,
+        });
+        if (mounted) {
+          setState(() {
+            _messages.add(msg);
+            _messages.sort((a, b) => _parseCreatedAt(a.createdAt).compareTo(_parseCreatedAt(b.createdAt)));
+          });
+        }
+      }
+      _scrollToBottom();
+    } on ApiException catch (e) {
+      if (mounted) showAppSnackBar(context, e.message, isError: true);
+    } finally {
+      if (mounted) setState(() => _isSending = false);
     }
   }
 
@@ -360,20 +403,15 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
   Future<void> _send() async {
     final text = _inputCtrl.text.trim();
-    final image = _pendingImage;
-    if (text.isEmpty && image == null) return;
+    if (text.isEmpty) return;
 
-    setState(() { _isSending = true; _pendingImage = null; });
+    setState(() => _isSending = true);
     _inputCtrl.clear();
 
     final authUser = context.read<AuthProvider>().user;
 
     try {
-      final data = await apiClient.sendMessage(
-        widget.room.roomId,
-        text,
-        imageFile: image,
-      );
+      final data = await apiClient.sendMessage(widget.room.roomId, text);
       final msg = Message.fromJson({
         ...data,
         'shop_name': authUser?.shopName,
@@ -521,37 +559,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 画像プレビュー
-                  if (_pendingImage != null)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                      child: Stack(
-                        alignment: Alignment.topRight,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.file(
-                              _pendingImage!,
-                              height: 100,
-                              width: 100,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () => setState(() => _pendingImage = null),
-                            child: Container(
-                              decoration: const BoxDecoration(
-                                color: Colors.black54,
-                                shape: BoxShape.circle,
-                              ),
-                              padding: const EdgeInsets.all(2),
-                              child: const Icon(Icons.close, size: 16, color: Colors.white),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  // テキスト入力行
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                     child: Row(
@@ -842,6 +849,78 @@ class _MessageBubble extends StatelessWidget {
     } catch (_) {
       return '';
     }
+  }
+}
+
+// ---- 画像プレビュー＆送信画面 ----
+
+class _ImagePreviewScreen extends StatefulWidget {
+  final List<File> images;
+  final Future<void> Function(List<File>) onSend;
+
+  const _ImagePreviewScreen({required this.images, required this.onSend});
+
+  @override
+  State<_ImagePreviewScreen> createState() => _ImagePreviewScreenState();
+}
+
+class _ImagePreviewScreenState extends State<_ImagePreviewScreen> {
+  bool _isSending = false;
+
+  Future<void> _send() async {
+    setState(() => _isSending = true);
+    try {
+      await widget.onSend(widget.images);
+      if (mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('${widget.images.length}枚の画像'),
+        actions: [
+          _isSending
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                )
+              : TextButton(
+                  onPressed: _send,
+                  child: Text(
+                    '送信',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+        ],
+      ),
+      body: GridView.builder(
+        padding: const EdgeInsets.all(8),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 4,
+          mainAxisSpacing: 4,
+        ),
+        itemCount: widget.images.length,
+        itemBuilder: (context, index) => ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: Image.file(widget.images[index], fit: BoxFit.cover),
+        ),
+      ),
+    );
   }
 }
 
