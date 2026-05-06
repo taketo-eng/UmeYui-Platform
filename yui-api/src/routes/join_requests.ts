@@ -287,7 +287,7 @@ joinRequestRoutes.patch('/:requestId', async (c) => {
 
 	const newCount = countResult?.count ?? 0;
 
-	if (slot.min_vendors !== null && newCount >= slot.min_vendors) {
+	if (slot.min_vendors !== null && newCount >= slot.min_vendors && slot.status !== 'confirmed') {
 		await confirmSlot(c.env, request.slot_id);
 	}
 
