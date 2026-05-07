@@ -366,6 +366,16 @@ class ApiClient {
     await patch('/notifications/read-all', {});
   }
 
+  Future<Map<String, dynamic>> broadcastNotification({
+    required String title,
+    required String body,
+  }) async {
+    return await post('/notifications/broadcast', {
+      'title': title,
+      'body': body,
+    });
+  }
+
   // ---- チャットAPI ----
 
   Future<List<dynamic>> getChatRooms() async {

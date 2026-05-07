@@ -53,6 +53,11 @@ class _AdminScreenState extends State<AdminScreen> {
       appBar: AppBar(
         title: const Text('ユーザー管理'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.campaign_outlined),
+            tooltip: 'お知らせを送信',
+            onPressed: _showBroadcastDialog,
+          ),
           // 自分のプロフィールへ
           IconButton(
             icon: myUser?.avatarUrl != null
@@ -100,6 +105,85 @@ class _AdminScreenState extends State<AdminScreen> {
         itemBuilder: (context, index) => _UserTile(
           user: _users[index],
           onTap: () => _showDetailSheet(context, _users[index]),
+        ),
+      ),
+    );
+  }
+
+  // お知らせ一斉送信ダイアログ
+  Future<void> _showBroadcastDialog() async {
+    final titleCtrl = TextEditingController();
+    final bodyCtrl = TextEditingController();
+    bool isSending = false;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          title: const Text('お知らせを全員に送信'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  '有効な出店者全員にプッシュ通知とアプリ内通知を送信します。',
+                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: titleCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'タイトル（プッシュ通知の件名）*',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: bodyCtrl,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: '本文 *',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('キャンセル'),
+            ),
+            FilledButton(
+              onPressed: isSending
+                  ? null
+                  : () async {
+                      if (titleCtrl.text.trim().isEmpty || bodyCtrl.text.trim().isEmpty) {
+                        showAppSnackBar(ctx, 'タイトルと本文は必須です', isError: true);
+                        return;
+                      }
+                      setDialogState(() => isSending = true);
+                      try {
+                        final res = await apiClient.broadcastNotification(
+                          title: titleCtrl.text.trim(),
+                          body: bodyCtrl.text.trim(),
+                        );
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) showAppSnackBar(context, res['message'] as String? ?? '送信しました');
+                      } on ApiException catch (e) {
+                        if (ctx.mounted) {
+                          setDialogState(() => isSending = false);
+                          showAppSnackBar(ctx, e.message, isError: true);
+                        }
+                      }
+                    },
+              child: isSending
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('送信'),
+            ),
+          ],
         ),
       ),
     );

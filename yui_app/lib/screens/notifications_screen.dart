@@ -156,6 +156,7 @@ class _AnnouncementsTab extends StatelessWidget {
           'recruitment_started' => (Icons.campaign_outlined, const Color(0xFFE07B00)),
           'request_approved' => (Icons.check_circle_outline, const Color(0xFF2E7D32)),
           'request_rejected' => (Icons.cancel_outlined, const Color(0xFFC62828)),
+          'announcement' => (Icons.info_outline, const Color(0xFF1565C0)),
           _ => (Icons.notifications_outlined, Colors.grey),
         };
         return Card(
