@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../core/api_client.dart';
 import '../core/app_snackbar.dart';
 import '../core/auth_provider.dart';
+import '../models/slot.dart';
 import '../models/user.dart';
 import 'profile_screen.dart';
 
@@ -13,7 +14,8 @@ class AdminScreen extends StatefulWidget {
   State<AdminScreen> createState() => _AdminScreenState();
 }
 
-class _AdminScreenState extends State<AdminScreen> {
+class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
   List<User> _users = [];
   bool _isLoading = true;
   String? _error;
@@ -21,7 +23,20 @@ class _AdminScreenState extends State<AdminScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_onTabChanged);
     _loadUsers();
+  }
+
+  void _onTabChanged() {
+    if (!_tabController.indexIsChanging) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _tabController.removeListener(_onTabChanged);
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUsers() async {
@@ -48,17 +63,18 @@ class _AdminScreenState extends State<AdminScreen> {
   @override
   Widget build(BuildContext context) {
     final myUser = context.watch<AuthProvider>().user;
+    final onUserTab = _tabController.index == 0;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ユーザー管理'),
+        title: const Text('管理'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.campaign_outlined),
-            tooltip: 'お知らせを送信',
-            onPressed: _showBroadcastDialog,
-          ),
-          // 自分のプロフィールへ
+          if (onUserTab)
+            IconButton(
+              icon: const Icon(Icons.campaign_outlined),
+              tooltip: 'お知らせを送信',
+              onPressed: _showBroadcastDialog,
+            ),
           IconButton(
             icon: myUser?.avatarUrl != null
                 ? CircleAvatar(
@@ -72,16 +88,31 @@ class _AdminScreenState extends State<AdminScreen> {
             ),
           ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'ユーザー管理'),
+            Tab(text: '枠の状況'),
+          ],
+        ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showCreateDialog(context),
-        child: const Icon(Icons.person_add),
+      floatingActionButton: onUserTab
+          ? FloatingActionButton(
+              onPressed: () => _showCreateDialog(context),
+              child: const Icon(Icons.person_add),
+            )
+          : null,
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildUserBody(),
+          const _SlotSummaryTab(),
+        ],
       ),
-      body: _buildBody(),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildUserBody() {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
       return Center(
@@ -811,5 +842,182 @@ class _UserDetailSheetState extends State<_UserDetailSheet> {
         }
       }
     }
+  }
+}
+
+// ---- 枠の状況タブ ----
+
+class _SlotSummaryTab extends StatefulWidget {
+  const _SlotSummaryTab();
+
+  @override
+  State<_SlotSummaryTab> createState() => _SlotSummaryTabState();
+}
+
+class _SlotSummaryTabState extends State<_SlotSummaryTab> {
+  List<Slot> _slots = [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _isLoading = true; _error = null; });
+    try {
+      final data = await apiClient.getSlots();
+      setState(() {
+        _slots = data.map((e) => Slot.fromJson(e as Map<String, dynamic>)).toList();
+        _isLoading = false;
+      });
+    } on ApiException catch (e) {
+      setState(() { _error = e.message; _isLoading = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(_error!, style: const TextStyle(color: Colors.red)),
+            const SizedBox(height: 16),
+            ElevatedButton(onPressed: _load, child: const Text('再読み込み')),
+          ],
+        ),
+      );
+    }
+    if (_slots.isEmpty) return const Center(child: Text('予定されている枠はありません'));
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _slots.length,
+        itemBuilder: (_, i) => _SlotSummaryCard(slot: _slots[i]),
+      ),
+    );
+  }
+}
+
+class _SlotSummaryCard extends StatelessWidget {
+  final Slot slot;
+  const _SlotSummaryCard({required this.slot});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final statusColor = switch (slot.status) {
+      'recruiting' => const Color(0xFFE07B00),
+      'confirmed'  => const Color(0xFF2E7D32),
+      _            => const Color(0xFFCCCCCC),
+    };
+    final statusLabel = switch (slot.status) {
+      'open'       => '募集前',
+      'recruiting' => '募集中',
+      'confirmed'  => '開催確定',
+      _            => slot.status,
+    };
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 3,
+            decoration: BoxDecoration(
+              color: statusColor,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(12),
+                topRight: Radius.circular(12),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(slot.date, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(statusLabel, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: statusColor)),
+                    ),
+                  ],
+                ),
+                if (slot.name != null) ...[
+                  const SizedBox(height: 2),
+                  Text(slot.name!, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600, color: theme.colorScheme.primary)),
+                ],
+                if (slot.startTime != null && slot.endTime != null) ...[
+                  const SizedBox(height: 2),
+                  Row(children: [
+                    const Icon(Icons.access_time, size: 13, color: Colors.grey),
+                    const SizedBox(width: 3),
+                    Text('${slot.startTime} 〜 ${slot.endTime}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  ]),
+                ],
+                if (slot.vendors.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    ...slot.vendors.take(6).map((v) => Padding(
+                      padding: const EdgeInsets.only(right: 3),
+                      child: CircleAvatar(
+                        radius: 12,
+                        backgroundColor: theme.colorScheme.primaryContainer,
+                        backgroundImage: v.avatarUrl != null ? NetworkImage(resolveUrl(v.avatarUrl!)) : null,
+                        child: v.avatarUrl == null ? Text((v.shopName ?? '?').substring(0, 1), style: const TextStyle(fontSize: 9)) : null,
+                      ),
+                    )),
+                    if (slot.vendors.length > 6) ...[
+                      const SizedBox(width: 3),
+                      Text('+${slot.vendors.length - 6}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                    ],
+                    const SizedBox(width: 8),
+                    Text('${slot.currentCount}人', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  ]),
+                ],
+                if (slot.minVendors != null) ...[
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      value: (slot.currentCount / slot.minVendors!).clamp(0.0, 1.0),
+                      backgroundColor: Colors.grey[200],
+                      color: slot.isConfirmed ? Colors.green : Colors.orange,
+                      minHeight: 5,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  if (slot.isRecruiting && slot.currentCount < slot.minVendors!)
+                    Text(
+                      'あと${slot.minVendors! - slot.currentCount}人で開催確定',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFFE07B00)),
+                    )
+                  else
+                    Text(
+                      '${slot.currentCount} / ${slot.minVendors}人（最大${slot.maxVendors ?? slot.minVendors}人）',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

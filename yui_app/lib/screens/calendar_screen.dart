@@ -1121,6 +1121,17 @@ class _ProgressBar extends StatelessWidget {
           backgroundColor: Colors.grey[200],
           color: progress >= 1.0 ? Colors.green : Colors.orange,
         ),
+        if (slot.isRecruiting && current < min) ...[
+          const SizedBox(height: 4),
+          Text(
+            'あと${min - current}人で開催確定！',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFFE07B00),
+            ),
+          ),
+        ],
       ],
     );
   }
