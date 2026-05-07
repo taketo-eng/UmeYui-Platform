@@ -45,7 +45,16 @@ userRoutes.get('/', async (c) => {
 
 	const { results } = await c.env.umeyui_db
 		.prepare(
-			"SELECT id, email, role, shop_name, bio, homepage_bio, category, avatar_url, homepage_avatar_url, website_url, instagram_url, x_url, line_url, facebook_url, is_active, created_at FROM users WHERE id != 'system' ORDER BY created_at DESC",
+			`SELECT u.id, u.email, u.role, u.shop_name, u.bio, u.homepage_bio, u.category,
+			        u.avatar_url, u.homepage_avatar_url, u.website_url, u.instagram_url,
+			        u.x_url, u.line_url, u.facebook_url, u.is_active, u.created_at,
+			        (SELECT COUNT(*) FROM reservations r
+			         JOIN slots s ON s.id = r.slot_id
+			         WHERE r.user_id = u.id AND r.status = 'confirmed' AND s.date < date('now')
+			        ) AS participation_count
+			 FROM users u
+			 WHERE u.id != 'system'
+			 ORDER BY u.created_at DESC`,
 		)
 		.all();
 

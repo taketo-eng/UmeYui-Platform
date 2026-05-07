@@ -79,8 +79,58 @@ async function scheduledHandler(_event: ScheduledEvent, env: Env, _ctx: Executio
 	const toJstDate = (offsetDays: number) =>
 		new Date(nowJst.getTime() + offsetDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
+	const todayJst = toJstDate(0);
 	const yesterdayJst = toJstDate(-1);
 	const sevenDaysAgoJst = toJstDate(-7);
+
+	// --- 過去の recruiting スロット: 参加者に「最低人数未達で中止」を通知してから削除 ---
+	const { results: expiredRecruitingSlots } = await env.umeyui_db
+		.prepare("SELECT id, date, name FROM slots WHERE date < ? AND status = 'recruiting'")
+		.bind(todayJst)
+		.all<{ id: string; date: string; name: string | null }>();
+
+	for (const slot of expiredRecruitingSlots) {
+		const { results: participants } = await env.umeyui_db
+			.prepare("SELECT user_id FROM reservations WHERE slot_id = ? AND status != 'cancelled'")
+			.bind(slot.id)
+			.all<{ user_id: string }>();
+
+		if (participants.length > 0) {
+			const label = slot.name ?? slot.date;
+			const message = `${label}の出店枠は最低人数に達しなかったため、中止となりました。`;
+			const now = new Date().toISOString();
+
+			// slot_id は null（スロットを削除するため FK 参照しない）
+			await Promise.all(
+				participants.map((p) =>
+					env.umeyui_db
+						.prepare("INSERT INTO notifications (id, user_id, type, message, is_read, created_at) VALUES (?, ?, 'slot_cancelled', ?, 0, ?)")
+						.bind(crypto.randomUUID(), p.user_id, message, now)
+						.run(),
+				),
+			);
+			await Promise.all(participants.map((p) => sendPushToUser(env, p.user_id, '出店枠の中止', message)));
+		}
+
+		await env.umeyui_db.batch([
+			env.umeyui_db.prepare('DELETE FROM join_requests WHERE slot_id = ?').bind(slot.id),
+			env.umeyui_db.prepare('DELETE FROM notifications WHERE slot_id = ?').bind(slot.id),
+			env.umeyui_db.prepare('DELETE FROM reservations WHERE slot_id = ?').bind(slot.id),
+		]);
+		await env.umeyui_db.prepare('DELETE FROM slots WHERE id = ?').bind(slot.id).run();
+	}
+
+	// --- 過去の open スロット: 誰も予約していないため黙って削除 ---
+	const { results: expiredOpenSlots } = await env.umeyui_db
+		.prepare("SELECT id FROM slots WHERE date < ? AND status = 'open'")
+		.bind(todayJst)
+		.all<{ id: string }>();
+
+	if (expiredOpenSlots.length > 0) {
+		await env.umeyui_db.batch(
+			expiredOpenSlots.map((s) => env.umeyui_db.prepare('DELETE FROM slots WHERE id = ?').bind(s.id)),
+		);
+	}
 
 	// --- Day +1: 開催翌日 → システムメッセージ送信（未送信のルームのみ） ---
 	const { results: endingSlots } = await env.umeyui_db

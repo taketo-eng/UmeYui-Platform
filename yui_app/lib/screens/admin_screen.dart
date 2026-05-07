@@ -333,7 +333,10 @@ class _UserTile extends StatelessWidget {
             : null,
       ),
       title: Text(user.shopName ?? '（屋号未設定）'),
-      subtitle: Text(user.email, style: const TextStyle(fontSize: 12)),
+      subtitle: Text(
+        '${user.email}　${user.participationCount > 0 ? '${user.participationCount}回出店' : '出店実績なし'}',
+        style: const TextStyle(fontSize: 12),
+      ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

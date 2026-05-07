@@ -157,6 +157,7 @@ class _AnnouncementsTab extends StatelessWidget {
           'request_approved' => (Icons.check_circle_outline, const Color(0xFF2E7D32)),
           'request_rejected' => (Icons.cancel_outlined, const Color(0xFFC62828)),
           'announcement' => (Icons.info_outline, const Color(0xFF1565C0)),
+          'slot_cancelled' => (Icons.event_busy_outlined, const Color(0xFFC62828)),
           _ => (Icons.notifications_outlined, Colors.grey),
         };
         return Card(

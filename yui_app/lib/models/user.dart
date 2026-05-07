@@ -29,6 +29,7 @@ class User {
   final String? xUrl;
   final String? lineUrl;
   final String? facebookUrl;
+  final int participationCount;
 
   const User({
     required this.id,
@@ -46,6 +47,7 @@ class User {
     this.xUrl,
     this.lineUrl,
     this.facebookUrl,
+    this.participationCount = 0,
   });
 
   factory User.fromJson(Map<String, dynamic> json) => User(
@@ -64,6 +66,7 @@ class User {
     xUrl: json['x_url'] as String?,
     lineUrl: json['line_url'] as String?,
     facebookUrl: json['facebook_url'] as String?,
+    participationCount: json['participation_count'] as int? ?? 0,
   );
 
   bool get isAdmin => role == 'admin';
