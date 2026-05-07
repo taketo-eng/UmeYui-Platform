@@ -11,55 +11,7 @@ import 'chat_screen.dart';
 import 'profile_screen.dart';
 import 'admin_screen.dart';
 import 'notifications_screen.dart';
-import 'package:upgrader/upgrader.dart';
-
-// iTunes APIが trackViewUrl を返さない場合でもApp Storeを開けるようフォールバックURLを保証
-class _IosUpgraderStore extends UpgraderStore {
-  final _inner = UpgraderAppStore();
-
-  @override
-  Future<UpgraderVersionInfo> getVersionInfo({
-    required UpgraderState state,
-    required installedVersion,
-    required String? country,
-    required String? language,
-  }) async {
-    final info = await _inner.getVersionInfo(
-      state: state,
-      installedVersion: installedVersion,
-      country: country,
-      language: language,
-    );
-    if (info.appStoreListingURL != null && info.appStoreListingURL!.isNotEmpty) {
-      return info;
-    }
-    return UpgraderVersionInfo(
-      appStoreListingURL: 'https://apps.apple.com/jp/app/id6762629745',
-      appStoreVersion: info.appStoreVersion,
-      installedVersion: info.installedVersion,
-      isCriticalUpdate: info.isCriticalUpdate,
-      minAppVersion: info.minAppVersion,
-      releaseNotes: info.releaseNotes,
-    );
-  }
-}
-
-class _JaUpgraderMessages extends UpgraderMessages {
-  @override
-  String get title => 'アップデートのお知らせ';
-  @override
-  String get body => '{{appName}} の新しいバージョン（{{currentInstalledVersion}} → {{currentAppStoreVersion}}）が利用可能です。';
-  @override
-  String get buttonTitleUpdate => '今すぐアップデート';
-  @override
-  String get buttonTitleIgnore => '無視する';
-  @override
-  String get buttonTitleLater => '後で';
-  @override
-  String get prompt => 'アップデートしますか？';
-  @override
-  String get releaseNotes => 'リリースノート';
-}
+import 'package:new_version_plus/new_version_plus.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -81,7 +33,29 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadChatUnread();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       setupNotificationHandlers(context);
+      _checkForUpdate();
     });
+  }
+
+  Future<void> _checkForUpdate() async {
+    final newVersion = NewVersionPlus(
+      iOSId: 'com.umeyui',
+      androidId: 'com.umeyui',
+      iOSAppStoreCountry: 'jp',
+    );
+    try {
+      final status = await newVersion.getVersionStatus();
+      if (status != null && status.canUpdate && mounted) {
+        newVersion.showUpdateDialog(
+          context: context,
+          versionStatus: status,
+          dialogTitle: 'アップデートのお知らせ',
+          dialogText: '新しいバージョン（${status.localVersion} → ${status.storeVersion}）が利用可能です。最新版をお使いください。',
+          updateButtonText: '今すぐアップデート',
+          allowDismissal: false,
+        );
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadPendingCount() async {
@@ -154,19 +128,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     return Scaffold(
-      body: UpgradeAlert(
-        upgrader: Upgrader(
-          messages: _JaUpgraderMessages(),
-          storeController: UpgraderStoreController(
-            oniOS: () => _IosUpgraderStore(),
-          ),
-        ),
-        dialogStyle: UpgradeDialogStyle.cupertino,
-        barrierDismissible: false,
-        showIgnore: false,
-        showLater: false,
-        child: IndexedStack(index: _currentIndex, children: _screens),
-      ),
+      body: IndexedStack(index: _currentIndex, children: _screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
