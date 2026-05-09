@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/api_client.dart';
+import '../core/secrets.dart';
 import '../core/app_snackbar.dart';
 import '../core/auth_provider.dart';
 import '../models/user.dart';
@@ -260,7 +261,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       : facebookCtrl.text.trim(),
                 );
                 await auth.refreshUser();
+                final userId = auth.user!.id;
                 if (ctx.mounted) Navigator.pop(ctx);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('保存しました'),
+                      action: SnackBarAction(
+                        label: 'ホームページで確認',
+                        onPressed: () async {
+                          final url = Uri.parse(
+                            'https://umeya.life/preview/vendor/$userId?token=$previewToken',
+                          );
+                          await launchUrl(url, mode: LaunchMode.externalApplication);
+                        },
+                      ),
+                    ),
+                  );
+                }
               } on ApiException catch (e) {
                 if (ctx.mounted) {
                   setDialogState(() => isSaving = false);

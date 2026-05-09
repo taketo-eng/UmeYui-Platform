@@ -33,6 +33,7 @@ publicRoutes.use(
 
 publicRoutes.use('*', async (c, next) => {
 	if (c.req.method === 'OPTIONS') return await next();
+	if (c.req.path.startsWith('/vendor-preview/')) return await next();
 	const apiKey = c.req.header('X-API-Key');
 	if (!apiKey || apiKey !== c.env.ASTRO_API_KEY) {
 		return c.json({ error: 'Unauthorized' }, 401);
@@ -142,4 +143,50 @@ publicRoutes.get('/vendors', async (c) => {
 	}));
 
 	return c.json({ vendors });
+});
+
+// GET /public/vendor-preview/:id?token=xxx
+// 出店者プロフィールのプレビュー（PREVIEW_TOKENで認証）
+publicRoutes.get('/vendor-preview/:id', async (c) => {
+	const token = c.req.query('token');
+	if (!token || token !== c.env.PREVIEW_TOKEN) {
+		return c.json({ error: 'Unauthorized' }, 401);
+	}
+
+	const { id } = c.req.param();
+	const apiOrigin = new URL(c.req.url).origin;
+
+	const vendor = await c.env.umeyui_db
+		.prepare(
+			`SELECT id, shop_name, homepage_bio, category, homepage_avatar_url,
+			        website_url, instagram_url, x_url, line_url, facebook_url
+			 FROM users
+			 WHERE id = ? AND role = 'vendor'`,
+		)
+		.bind(id)
+		.first<{
+			id: string;
+			shop_name: string | null;
+			homepage_bio: string | null;
+			category: string;
+			homepage_avatar_url: string | null;
+			website_url: string | null;
+			instagram_url: string | null;
+			x_url: string | null;
+			line_url: string | null;
+			facebook_url: string | null;
+		}>();
+
+	if (!vendor) {
+		return c.json({ error: 'Vendor not found' }, 404);
+	}
+
+	return c.json({
+		vendor: {
+			...vendor,
+			homepage_avatar_url: vendor.homepage_avatar_url
+				? `${apiOrigin}${vendor.homepage_avatar_url}`
+				: null,
+		},
+	});
 });

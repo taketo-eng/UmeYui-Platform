@@ -15,6 +15,7 @@ declare namespace Cloudflare {
 		FIREBASE_PRIVATE_KEY: string;
 		VERCEL_DEPLOY_HOOK_URL: string;
 		ASTRO_API_KEY: string;
+		PREVIEW_TOKEN: string;
 	}
 }
 interface Env extends Cloudflare.Env {

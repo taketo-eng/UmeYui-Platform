@@ -54,3 +54,5 @@ scripts/
 env.g.dart
 firebase_options.dart
 firebase_app_id_file.json
+
+lib/core/secrets.dart
