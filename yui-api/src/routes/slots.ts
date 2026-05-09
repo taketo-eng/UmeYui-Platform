@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { requireAuth, requireAdmin } from '../lib/middleware';
-import { confirmSlot } from '../lib/slot_helpers';
+import { confirmSlot, scheduleDeadlineAlarm, cancelDeadlineAlarm } from '../lib/slot_helpers';
 
 export const slotRoutes = new Hono<{ Bindings: Env }>();
 
@@ -178,7 +178,7 @@ slotRoutes.patch('/:id', async (c) => {
 		}
 	}
 
-	const { name, start_time, end_time, description, min_vendors, max_vendors } = await c.req.json();
+	const { name, start_time, end_time, description, min_vendors, max_vendors, deadline_at } = await c.req.json();
 
 	if (min_vendors !== undefined || max_vendors !== undefined) {
 		const slot = await c.env.umeyui_db
@@ -224,6 +224,28 @@ slotRoutes.patch('/:id', async (c) => {
 	}
 	if (max_vendors !== undefined) {
 		await c.env.umeyui_db.prepare('UPDATE slots SET max_vendors = ? WHERE id = ?').bind(max_vendors, id).run();
+	}
+
+	// deadline_at の更新（undefined = 変更なし、null = クリア、string = 設定）
+	if (deadline_at !== undefined) {
+		if (deadline_at === null) {
+			await c.env.umeyui_db.prepare('UPDATE slots SET deadline_at = NULL WHERE id = ?').bind(id).run();
+			await cancelDeadlineAlarm(c.env, id).catch(() => {});
+		} else {
+			const deadlineMs = new Date(deadline_at).getTime();
+			if (isNaN(deadlineMs) || deadlineMs <= Date.now()) {
+				return c.json({ error: 'deadline_at は未来の日時を指定してください' }, 400);
+			}
+			const slotForDeadline = await c.env.umeyui_db
+				.prepare('SELECT status FROM slots WHERE id = ?')
+				.bind(id)
+				.first<{ status: string }>();
+			if (slotForDeadline?.status !== 'recruiting') {
+				return c.json({ error: '締め切りは募集中のみ設定できます' }, 400);
+			}
+			await c.env.umeyui_db.prepare('UPDATE slots SET deadline_at = ? WHERE id = ?').bind(deadline_at, id).run();
+			await scheduleDeadlineAlarm(c.env, id, deadline_at).catch(() => {});
+		}
 	}
 
 	return c.json({ message: '枠情報を更新しました' });
@@ -275,6 +297,9 @@ slotRoutes.post('/:id/cancel-event', async (c) => {
 	}
 
 	await c.env.umeyui_db.batch(batchOps);
+
+	// 締め切りアラームをキャンセル
+	await cancelDeadlineAlarm(c.env, id).catch(() => {});
 
 	if (!(authUser.is_test ?? false) && c.env.VERCEL_DEPLOY_HOOK_URL) {
 		await fetch(c.env.VERCEL_DEPLOY_HOOK_URL, { method: 'POST' }).catch(() => {});
@@ -331,6 +356,10 @@ slotRoutes.delete('/:id', async (c) => {
 		);
 	}
 	await c.env.umeyui_db.batch(batchOps);
+
+	// 締め切りアラームをキャンセル（削除前に実行）
+	await cancelDeadlineAlarm(c.env, id).catch(() => {});
+
 	await c.env.umeyui_db.prepare('DELETE FROM slots WHERE id = ?').bind(id).run();
 
 	if (!(admin.is_test ?? false) && c.env.VERCEL_DEPLOY_HOOK_URL) {

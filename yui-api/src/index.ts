@@ -1,4 +1,5 @@
 import {Hono} from 'hono'
+export { SlotAlarm } from './durable-objects/slot_alarm'
 import { authRoutes } from './routes/auth'
 import { userRoutes } from './routes/users'
 import { slotRoutes } from './routes/slots'

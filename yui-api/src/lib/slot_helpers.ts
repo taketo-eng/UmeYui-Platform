@@ -2,6 +2,20 @@
 import { sendPushNotification } from './fcm';
 
 
+export async function scheduleDeadlineAlarm(env: Env, slotId: string, deadlineAt: string): Promise<void> {
+	const stub = env.SLOT_ALARM.get(env.SLOT_ALARM.idFromName(slotId));
+	await stub.fetch('http://internal/schedule', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ deadline_at: deadlineAt }),
+	});
+}
+
+export async function cancelDeadlineAlarm(env: Env, slotId: string): Promise<void> {
+	const stub = env.SLOT_ALARM.get(env.SLOT_ALARM.idFromName(slotId));
+	await stub.fetch('http://internal/', { method: 'DELETE' });
+}
+
 export async function confirmSlot(env: Env, slotId: string, skipSideEffects = false): Promise<void> {
 	// 再確定時は既存のチャットルームを再利用し、会話履歴を保持する
 	const existingRoom = await env.umeyui_db
@@ -19,6 +33,9 @@ export async function confirmSlot(env: Env, slotId: string, skipSideEffects = fa
 		);
 	}
 	await env.umeyui_db.batch(batchOps);
+
+	// 締め切りアラームをキャンセル（開催確定済みなので不要）
+	await cancelDeadlineAlarm(env, slotId).catch(() => {});
 
 	const initiator = await env.umeyui_db
 		.prepare('SELECT u.shop_name FROM users u JOIN reservations r ON u.id = r.user_id WHERE r.slot_id = ? AND r.is_initiator = 1')

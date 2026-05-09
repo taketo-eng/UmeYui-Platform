@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -50,6 +51,8 @@ class _AppRouter extends StatelessWidget {
     return MaterialApp.router(
       title: 'UmeYui - 古民家梅屋出店者プラットフォーム',
       routerConfig: router,
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      supportedLocales: const [Locale('ja', 'JP'), Locale('en')],
       theme: ThemeData(
         colorScheme: colorScheme,
         useMaterial3: true,

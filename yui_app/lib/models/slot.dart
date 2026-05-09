@@ -31,6 +31,7 @@ class Slot {
   final int currentCount;
   final List<SlotVendor> vendors;
   final String? description;
+  final DateTime? deadlineAt;
 
   const Slot({
     required this.id,
@@ -44,6 +45,7 @@ class Slot {
     required this.currentCount,
     this.vendors = const [],
     this.description,
+    this.deadlineAt,
   });
 
   factory Slot.fromJson(Map<String, dynamic> json) => Slot(
@@ -62,6 +64,9 @@ class Slot {
             .toList() ??
         [],
     description: json['description'] as String?,
+    deadlineAt: json['deadline_at'] != null
+        ? DateTime.parse(json['deadline_at'] as String).toLocal()
+        : null,
   );
 
   bool get isOpen => status == 'open';

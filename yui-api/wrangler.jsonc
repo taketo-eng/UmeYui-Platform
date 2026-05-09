@@ -31,7 +31,15 @@
 	"placement": { "region": "gcp:asia-northeast1"},
 	"triggers": {
 		"crons": ["0 15 * * *"]
-	}
+	},
+	"durable_objects": {
+		"bindings": [
+			{ "name": "SLOT_ALARM", "class_name": "SlotAlarm" }
+		]
+	},
+	"migrations": [
+		{ "tag": "v1", "new_sqlite_classes": ["SlotAlarm"] }
+	]
 	/**
 	 * Bindings
 	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including

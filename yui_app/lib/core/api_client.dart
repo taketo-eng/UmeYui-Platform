@@ -294,6 +294,8 @@ class ApiClient {
     String? description,
     int? minVendors,
     int? maxVendors,
+    String? deadlineAt,
+    bool clearDeadline = false,
   }) async {
     await patch('/slots/$slotId', {
       if (name != null) 'name': name,
@@ -302,6 +304,8 @@ class ApiClient {
       if (description != null) 'description': description,
       if (minVendors != null) 'min_vendors': minVendors,
       if (maxVendors != null) 'max_vendors': maxVendors,
+      if (deadlineAt != null) 'deadline_at': deadlineAt,
+      if (clearDeadline) 'deadline_at': null,
     });
   }
 
@@ -310,10 +314,12 @@ class ApiClient {
     String slotId, {
     int? minVendors,
     int? maxVendors,
+    String? deadlineAt,
   }) async {
     return await post('/slots/$slotId/reservations', {
       if (minVendors != null) 'min_vendors': minVendors,
       if (maxVendors != null) 'max_vendors': maxVendors,
+      if (deadlineAt != null) 'deadline_at': deadlineAt,
     });
   }
 

@@ -7,6 +7,32 @@ import '../core/auth_provider.dart';
 import '../models/slot.dart';
 import 'profile_screen.dart';
 
+String _fmtDeadline(DateTime dt) {
+  return '${dt.month}月${dt.day}日 ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+}
+
+Future<DateTime?> _showDeadlinePicker(BuildContext context, {DateTime? initial, String? slotDate}) async {
+  final now = DateTime.now();
+  final lastDate = slotDate != null
+      ? DateTime.parse(slotDate)
+      : now.add(const Duration(days: 365));
+  final pickedDate = await showDatePicker(
+    context: context,
+    initialDate: initial ?? now,
+    firstDate: now,
+    lastDate: lastDate,
+    locale: const Locale('ja'),
+  );
+  if (pickedDate == null || !context.mounted) return null;
+  final pickedTime = await showTimePicker(
+    context: context,
+    initialTime: initial != null ? TimeOfDay.fromDateTime(initial) : const TimeOfDay(hour: 23, minute: 59),
+    builder: (ctx, child) => MediaQuery(data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true), child: child!),
+  );
+  if (pickedTime == null) return null;
+  return DateTime(pickedDate.year, pickedDate.month, pickedDate.day, pickedTime.hour, pickedTime.minute);
+}
+
 // 発起人ダイアログの返却値
 class _InitiatorSettings {
   final int minVendors;
@@ -15,6 +41,7 @@ class _InitiatorSettings {
   final String? endTime;
   final String? description;
   final String? name; // 管理者発起人フローのみ
+  final DateTime? deadlineAt;
   const _InitiatorSettings({
     required this.minVendors,
     required this.maxVendors,
@@ -22,6 +49,7 @@ class _InitiatorSettings {
     this.endTime,
     this.description,
     this.name,
+    this.deadlineAt,
   });
 }
 
@@ -292,6 +320,7 @@ class CalendarScreenState extends State<CalendarScreen> {
             startTime: initiatorSettings.startTime,
             endTime: initiatorSettings.endTime,
             description: initiatorSettings.description,
+            deadlineAt: initiatorSettings.deadlineAt?.toUtc().toIso8601String(),
           );
         }
         successCount++;
@@ -315,6 +344,7 @@ class CalendarScreenState extends State<CalendarScreen> {
     int maxVendors = 8;
     TimeOfDay? startTime;
     TimeOfDay? endTime;
+    DateTime? deadline;
     final nameCtrl = TextEditingController();
     final descCtrl = TextEditingController();
 
@@ -462,6 +492,38 @@ class CalendarScreenState extends State<CalendarScreen> {
                       isDense: true,
                     ),
                   ),
+                  const Divider(height: 24),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('募集締め切り（任意）',
+                        style: TextStyle(fontSize: 13, color: Color(0xFF616161))),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.schedule, size: 16),
+                          label: Text(deadline == null ? '締め切り日時を設定' : _fmtDeadline(deadline!),
+                              style: const TextStyle(fontSize: 13)),
+                          onPressed: () async {
+                            final d = await _showDeadlinePicker(ctx, initial: deadline, slotDate: sampleDate);
+                            if (d != null) setS(() => deadline = d);
+                          },
+                        ),
+                      ),
+                      if (deadline != null) ...[
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () => setS(() => deadline = null),
+                          tooltip: 'クリア',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -486,6 +548,7 @@ class CalendarScreenState extends State<CalendarScreen> {
                   name: nameCtrl.text.trim().isEmpty
                       ? null
                       : nameCtrl.text.trim(),
+                  deadlineAt: deadline,
                 ),
               ),
               child: const Text('設定する'),
@@ -722,6 +785,8 @@ class _EditRecruitingSheetState extends State<_EditRecruitingSheet> {
   TimeOfDay? _endTime;
   late int _minVendors;
   late int _maxVendors;
+  DateTime? _deadline;
+  bool _clearDeadline = false;
   bool _isSaving = false;
 
   @override
@@ -733,6 +798,7 @@ class _EditRecruitingSheetState extends State<_EditRecruitingSheet> {
     _endTime = _parseTime(widget.slot.endTime);
     _minVendors = widget.slot.minVendors ?? 2;
     _maxVendors = widget.slot.maxVendors ?? 8;
+    _deadline = widget.slot.deadlineAt;
   }
 
   @override
@@ -790,6 +856,8 @@ class _EditRecruitingSheetState extends State<_EditRecruitingSheet> {
         description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
         minVendors: _minVendors,
         maxVendors: _maxVendors,
+        deadlineAt: _deadline != null && !_clearDeadline ? _deadline!.toUtc().toIso8601String() : null,
+        clearDeadline: _clearDeadline,
       );
       widget.onSaved();
       if (mounted) {
@@ -873,6 +941,39 @@ class _EditRecruitingSheetState extends State<_EditRecruitingSheet> {
                   _maxVendors > _minVendors ? () => setState(() => _maxVendors--) : () {},
                   () => setState(() => _maxVendors++),
                 ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            const Text('募集締め切り', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.schedule, size: 18),
+                    label: Text(
+                      (_deadline != null && !_clearDeadline)
+                          ? _fmtDeadline(_deadline!)
+                          : '締め切り日時を設定',
+                    ),
+                    onPressed: () async {
+                      final d = await _showDeadlinePicker(context,
+                          initial: _clearDeadline ? null : _deadline,
+                          slotDate: widget.slot.date);
+                      if (d != null) setState(() { _deadline = d; _clearDeadline = false; });
+                    },
+                  ),
+                ),
+                if (_deadline != null && !_clearDeadline) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.clear, size: 18),
+                    onPressed: () => setState(() => _clearDeadline = true),
+                    tooltip: 'クリア',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 20),
@@ -1132,6 +1233,13 @@ class _ProgressBar extends StatelessWidget {
             ),
           ),
         ],
+        if (slot.isRecruiting && slot.deadlineAt != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            '締め切り: ${_fmtDeadline(slot.deadlineAt!)}',
+            style: const TextStyle(fontSize: 12, color: Color(0xFFC62828)),
+          ),
+        ],
       ],
     );
   }
@@ -1246,6 +1354,7 @@ class _ReserveButtonState extends State<_ReserveButton> {
           startTime: settings.startTime,
           endTime: settings.endTime,
           description: settings.description,
+          deadlineAt: settings.deadlineAt,
         );
       }
     } else {
@@ -1338,6 +1447,7 @@ class _ReserveButtonState extends State<_ReserveButton> {
     int maxVendors = 8;
     TimeOfDay? startTime;
     TimeOfDay? endTime;
+    DateTime? deadline;
     final nameCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     bool isConfirming = false;
@@ -1505,6 +1615,41 @@ class _ReserveButtonState extends State<_ReserveButton> {
                     isDense: true,
                   ),
                 ),
+                const Divider(height: 24),
+                // 募集締め切り（任意）
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('募集締め切り（任意）',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF616161))),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.schedule, size: 16),
+                        label: Text(
+                          deadline == null ? '締め切り日時を設定' : _fmtDeadline(deadline!),
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        onPressed: () async {
+                          final d = await _showDeadlinePicker(ctx, initial: deadline, slotDate: widget.slot.date);
+                          if (d != null) setDialogState(() => deadline = d);
+                        },
+                      ),
+                    ),
+                    if (deadline != null) ...[
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () => setDialogState(() => deadline = null),
+                        tooltip: 'クリア',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ],
+                ),
               ],
             ),
             ),
@@ -1534,6 +1679,8 @@ class _ReserveButtonState extends State<_ReserveButton> {
                         _ConfirmRow('最低人数', '$minVendors人'),
                         _ConfirmRow('最大人数', '$maxVendors人'),
                         _ConfirmRow('希望時間', timeStr),
+                        if (deadline != null)
+                          _ConfirmRow('締め切り', _fmtDeadline(deadline!)),
                       ],
                     ),
                     actions: [
@@ -1571,6 +1718,7 @@ class _ReserveButtonState extends State<_ReserveButton> {
                       description: descCtrl.text.trim().isEmpty
                           ? null
                           : descCtrl.text.trim(),
+                      deadlineAt: deadline,
                     ),
                   );
                 }
@@ -1590,6 +1738,7 @@ class _ReserveButtonState extends State<_ReserveButton> {
     String? startTime,
     String? endTime,
     String? description,
+    DateTime? deadlineAt,
   }) async {
     setState(() => _isLoading = true);
     try {
@@ -1597,6 +1746,7 @@ class _ReserveButtonState extends State<_ReserveButton> {
         widget.slot.id,
         minVendors: minVendors,
         maxVendors: maxVendors,
+        deadlineAt: deadlineAt?.toUtc().toIso8601String(),
       );
       // イベント名・時間・説明が設定されている場合はスロットも更新
       if (name != null || startTime != null || endTime != null || description != null) {

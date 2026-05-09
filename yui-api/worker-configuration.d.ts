@@ -17,7 +17,9 @@ declare namespace Cloudflare {
 		ASTRO_API_KEY: string;
 	}
 }
-interface Env extends Cloudflare.Env {}
+interface Env extends Cloudflare.Env {
+	SLOT_ALARM: DurableObjectNamespace;
+}
 type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };

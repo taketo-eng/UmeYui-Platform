@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { requireAuth } from '../lib/middleware';
-import { confirmSlot, deleteChatRoom, createNotificationsForAllVendors, sendPushToAllActive } from '../lib/slot_helpers';
+import { confirmSlot, deleteChatRoom, createNotificationsForAllVendors, sendPushToAllActive, scheduleDeadlineAlarm } from '../lib/slot_helpers';
 import { sendPushToUser } from '../lib/fcm';
 
 export const reservationRoutes = new Hono<{ Bindings: Env }>();
@@ -72,7 +72,7 @@ reservationRoutes.post('/:id/reservations', async (c) => {
 
 	// 発起人の場合は min / max が必須
 	if (isInitiator) {
-		const { min_vendors, max_vendors } = await c.req.json();
+		const { min_vendors, max_vendors, deadline_at } = await c.req.json();
 
 		if (!min_vendors || !max_vendors) {
 			return c.json({ error: '最初の予約者は min_vendors と max_vendors を設定してください' }, 400);
@@ -92,6 +92,14 @@ reservationRoutes.post('/:id/reservations', async (c) => {
 
 		const reservationId = existingCancelledInitiator?.id ?? crypto.randomUUID();
 
+		// deadline_at バリデーション（任意）
+		if (deadline_at !== undefined && deadline_at !== null) {
+			const deadlineMs = new Date(deadline_at).getTime();
+			if (isNaN(deadlineMs) || deadlineMs <= Date.now()) {
+				return c.json({ error: 'deadline_at は未来の日時を指定してください' }, 400);
+			}
+		}
+
 		// トランザクション: 予約追加 + 枠を recruiting に更新 + min/max を設定
 		await c.env.umeyui_db.batch([
 			existingCancelledInitiator
@@ -102,8 +110,8 @@ reservationRoutes.post('/:id/reservations', async (c) => {
 						.prepare('INSERT INTO reservations (id, slot_id, user_id, is_initiator, status) VALUES (?, ?, ?, 1, ?)')
 						.bind(reservationId, slotId, authUser.sub, 'pending'),
 			c.env.umeyui_db
-				.prepare("UPDATE slots SET status = 'recruiting', min_vendors = ?, max_vendors = ? WHERE id = ?")
-				.bind(min_vendors, max_vendors, slotId),
+				.prepare("UPDATE slots SET status = 'recruiting', min_vendors = ?, max_vendors = ?, deadline_at = ? WHERE id = ?")
+				.bind(min_vendors, max_vendors, deadline_at ?? null, slotId),
 		]);
 
 		// 枠の日付と発起人の屋号を取得
@@ -130,13 +138,19 @@ reservationRoutes.post('/:id/reservations', async (c) => {
 		// min_vendors=1 の場合は発起人1人で即確定（確定通知はconfirmSlot内で送信）
 		if (min_vendors === 1) {
 			await confirmSlot(c.env, slotId, isTest);
-		} else if (!isTest) {
-			await sendPushToAllActive(
-				c.env,
-				authUser.sub,
-				'出店枠の募集が始まりました',
-				`${initiatorName}さんが${slotInfo?.date ?? ''}の枠で募集を開始しました（最低${min_vendors}人）`,
-			);
+		} else {
+			// 締め切りアラームを登録（confirmSlotでキャンセルされるので先に設定してもOK）
+			if (deadline_at) {
+				await scheduleDeadlineAlarm(c.env, slotId, deadline_at).catch(() => {});
+			}
+			if (!isTest) {
+				await sendPushToAllActive(
+					c.env,
+					authUser.sub,
+					'出店枠の募集が始まりました',
+					`${initiatorName}さんが${slotInfo?.date ?? ''}の枠で募集を開始しました（最低${min_vendors}人）`,
+				);
+			}
 		}
 
 		return c.json({ id: reservationId, status: 'pending', is_initiator: true }, 201);
