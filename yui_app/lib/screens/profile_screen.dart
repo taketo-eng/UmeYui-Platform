@@ -271,7 +271,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         label: 'ホームページで確認',
                         onPressed: () async {
                           final url = Uri.parse(
-                            'https://umeya.life/preview/vendor/$userId?token=$previewToken',
+                            'https://umeya.life/preview-vendor?id=$userId&token=$previewToken',
                           );
                           await launchUrl(url, mode: LaunchMode.externalApplication);
                         },

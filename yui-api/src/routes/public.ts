@@ -33,7 +33,7 @@ publicRoutes.use(
 
 publicRoutes.use('*', async (c, next) => {
 	if (c.req.method === 'OPTIONS') return await next();
-	if (c.req.path.startsWith('/vendor-preview/')) return await next();
+	if (c.req.path.includes('vendor-preview')) return await next();
 	const apiKey = c.req.header('X-API-Key');
 	if (!apiKey || apiKey !== c.env.ASTRO_API_KEY) {
 		return c.json({ error: 'Unauthorized' }, 401);
