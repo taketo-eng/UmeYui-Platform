@@ -265,15 +265,17 @@ joinRequestRoutes.patch('/:requestId', async (c) => {
 		.first<{ id: string }>();
 
 	const reservationId = existingCancelled?.id ?? crypto.randomUUID();
+	// スロットが既に確定済みなら予約も直接confirmedにする（pendingのままだとチャットルームに入れない）
+	const targetStatus = slot.status === 'confirmed' ? 'confirmed' : 'pending';
 
 	await c.env.umeyui_db.batch([
 		existingCancelled
 			? c.env.umeyui_db
-					.prepare("UPDATE reservations SET status = 'pending', is_initiator = 0 WHERE id = ?")
-					.bind(reservationId)
+					.prepare('UPDATE reservations SET status = ?, is_initiator = 0 WHERE id = ?')
+					.bind(targetStatus, reservationId)
 			: c.env.umeyui_db
 					.prepare('INSERT INTO reservations (id, slot_id, user_id, is_initiator, status) VALUES (?, ?, ?, 0, ?)')
-					.bind(reservationId, request.slot_id, request.requester_id, 'pending'),
+					.bind(reservationId, request.slot_id, request.requester_id, targetStatus),
 		c.env.umeyui_db
 			.prepare("UPDATE join_requests SET status = 'approved', response_message = ? WHERE id = ?")
 			.bind(response_message ?? null, requestId),
