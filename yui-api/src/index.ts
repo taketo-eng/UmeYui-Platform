@@ -81,7 +81,6 @@ async function scheduledHandler(_event: ScheduledEvent, env: Env, _ctx: Executio
 		new Date(nowJst.getTime() + offsetDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 	const todayJst = toJstDate(0);
-	const yesterdayJst = toJstDate(-1);
 	const sevenDaysAgoJst = toJstDate(-7);
 
 	// --- 過去の recruiting スロット: 参加者に「最低人数未達で中止」を通知してから削除 ---
@@ -129,26 +128,33 @@ async function scheduledHandler(_event: ScheduledEvent, env: Env, _ctx: Executio
 
 	if (expiredOpenSlots.length > 0) {
 		await env.umeyui_db.batch(
-			expiredOpenSlots.map((s) => env.umeyui_db.prepare('DELETE FROM slots WHERE id = ?').bind(s.id)),
+			expiredOpenSlots.flatMap((s) => [
+				env.umeyui_db.prepare('DELETE FROM join_requests WHERE slot_id = ?').bind(s.id),
+				env.umeyui_db.prepare('DELETE FROM notifications WHERE slot_id = ?').bind(s.id),
+				env.umeyui_db.prepare('DELETE FROM slots WHERE id = ?').bind(s.id),
+			]),
 		);
 	}
 
-	// --- Day +1: 開催翌日 → システムメッセージ送信（未送信のルームのみ） ---
+	// --- Day +1〜+7: 開催済みで未送信のルームにシステムメッセージ送信 ---
 	const { results: endingSlots } = await env.umeyui_db
 		.prepare(
-			`SELECT s.id, cr.id AS room_id
+			`SELECT s.id, s.date, cr.id AS room_id
        FROM slots s
        JOIN chat_rooms cr ON cr.slot_id = s.id
-       WHERE s.date = ? AND s.status = 'confirmed'
+       WHERE s.date > ? AND s.date < ? AND s.status = 'confirmed'
        AND NOT EXISTS (
          SELECT 1 FROM messages WHERE room_id = cr.id AND user_id = 'system'
        )`,
 		)
-		.bind(yesterdayJst)
-		.all<{ id: string; room_id: string }>();
+		.bind(sevenDaysAgoJst, todayJst)
+		.all<{ id: string; date: string; room_id: string }>();
 
 	for (const slot of endingSlots) {
-		const msgBody = 'ご参加ありがとうございました。このチャットルームは7日後に削除されます。';
+		const deletionDate = new Date(slot.date + 'T00:00:00+09:00');
+		deletionDate.setDate(deletionDate.getDate() + 7);
+		const deletionLabel = `${deletionDate.getMonth() + 1}月${deletionDate.getDate()}日`;
+		const msgBody = `イベント開催ありがとうございました。このチャットルームは開催から7日後の${deletionLabel}に削除されます。`;
 
 		await env.umeyui_db
 			.prepare('INSERT INTO messages (id, room_id, user_id, body) VALUES (?, ?, ?, ?)')
