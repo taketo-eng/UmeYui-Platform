@@ -84,112 +84,129 @@ async function scheduledHandler(_event: ScheduledEvent, env: Env, _ctx: Executio
 	const sevenDaysAgoJst = toJstDate(-7);
 
 	// --- 過去の recruiting スロット: 参加者に「最低人数未達で中止」を通知してから削除 ---
-	const { results: expiredRecruitingSlots } = await env.umeyui_db
-		.prepare("SELECT id, date, name FROM slots WHERE date < ? AND status = 'recruiting'")
-		.bind(todayJst)
-		.all<{ id: string; date: string; name: string | null }>();
+	try {
+		const { results: expiredRecruitingSlots } = await env.umeyui_db
+			.prepare("SELECT id, date, name FROM slots WHERE date < ? AND status = 'recruiting'")
+			.bind(todayJst)
+			.all<{ id: string; date: string; name: string | null }>();
 
-	for (const slot of expiredRecruitingSlots) {
-		const { results: participants } = await env.umeyui_db
-			.prepare("SELECT user_id FROM reservations WHERE slot_id = ? AND status != 'cancelled'")
-			.bind(slot.id)
-			.all<{ user_id: string }>();
+		for (const slot of expiredRecruitingSlots) {
+			const { results: participants } = await env.umeyui_db
+				.prepare("SELECT user_id FROM reservations WHERE slot_id = ? AND status != 'cancelled'")
+				.bind(slot.id)
+				.all<{ user_id: string }>();
 
-		if (participants.length > 0) {
-			const label = slot.name ?? slot.date;
-			const message = `${label}の出店枠は最低人数に達しなかったため、中止となりました。`;
-			const now = new Date().toISOString();
+			if (participants.length > 0) {
+				const label = slot.name ?? slot.date;
+				const message = `${label}の出店枠は最低人数に達しなかったため、中止となりました。`;
+				const now = new Date().toISOString();
 
-			// slot_id は null（スロットを削除するため FK 参照しない）
-			await Promise.all(
-				participants.map((p) =>
-					env.umeyui_db
-						.prepare("INSERT INTO notifications (id, user_id, type, message, is_read, created_at) VALUES (?, ?, 'slot_cancelled', ?, 0, ?)")
-						.bind(crypto.randomUUID(), p.user_id, message, now)
-						.run(),
-				),
-			);
-			await Promise.all(participants.map((p) => sendPushToUser(env, p.user_id, '出店枠の中止', message)));
+				// slot_id は null（スロットを削除するため FK 参照しない）
+				await Promise.all(
+					participants.map((p) =>
+						env.umeyui_db
+							.prepare("INSERT INTO notifications (id, user_id, type, message, is_read, created_at) VALUES (?, ?, 'slot_cancelled', ?, 0, ?)")
+							.bind(crypto.randomUUID(), p.user_id, message, now)
+							.run(),
+					),
+				);
+				await Promise.all(participants.map((p) => sendPushToUser(env, p.user_id, '出店枠の中止', message)));
+			}
+
+			await env.umeyui_db.batch([
+				env.umeyui_db.prepare('DELETE FROM join_requests WHERE slot_id = ?').bind(slot.id),
+				env.umeyui_db.prepare('DELETE FROM notifications WHERE slot_id = ?').bind(slot.id),
+				env.umeyui_db.prepare('DELETE FROM reservations WHERE slot_id = ?').bind(slot.id),
+			]);
+			await env.umeyui_db.prepare('DELETE FROM slots WHERE id = ?').bind(slot.id).run();
 		}
-
-		await env.umeyui_db.batch([
-			env.umeyui_db.prepare('DELETE FROM join_requests WHERE slot_id = ?').bind(slot.id),
-			env.umeyui_db.prepare('DELETE FROM notifications WHERE slot_id = ?').bind(slot.id),
-			env.umeyui_db.prepare('DELETE FROM reservations WHERE slot_id = ?').bind(slot.id),
-		]);
-		await env.umeyui_db.prepare('DELETE FROM slots WHERE id = ?').bind(slot.id).run();
+	} catch (e) {
+		console.error('[scheduled] recruiting slots cleanup failed:', e);
 	}
 
 	// --- 過去の open スロット: 誰も予約していないため黙って削除 ---
-	const { results: expiredOpenSlots } = await env.umeyui_db
-		.prepare("SELECT id FROM slots WHERE date < ? AND status = 'open'")
-		.bind(todayJst)
-		.all<{ id: string }>();
+	try {
+		const { results: expiredOpenSlots } = await env.umeyui_db
+			.prepare("SELECT id FROM slots WHERE date < ? AND status = 'open'")
+			.bind(todayJst)
+			.all<{ id: string }>();
 
-	if (expiredOpenSlots.length > 0) {
-		await env.umeyui_db.batch(
-			expiredOpenSlots.flatMap((s) => [
-				env.umeyui_db.prepare('DELETE FROM join_requests WHERE slot_id = ?').bind(s.id),
-				env.umeyui_db.prepare('DELETE FROM notifications WHERE slot_id = ?').bind(s.id),
-				env.umeyui_db.prepare('DELETE FROM slots WHERE id = ?').bind(s.id),
-			]),
-		);
+		if (expiredOpenSlots.length > 0) {
+			await env.umeyui_db.batch(
+				expiredOpenSlots.flatMap((s) => [
+					env.umeyui_db.prepare('DELETE FROM join_requests WHERE slot_id = ?').bind(s.id),
+					env.umeyui_db.prepare('DELETE FROM notifications WHERE slot_id = ?').bind(s.id),
+					env.umeyui_db.prepare('DELETE FROM reservations WHERE slot_id = ?').bind(s.id),
+					env.umeyui_db.prepare('DELETE FROM slots WHERE id = ?').bind(s.id),
+				]),
+			);
+		}
+	} catch (e) {
+		console.error('[scheduled] open slots cleanup failed:', e);
 	}
 
 	// --- Day +1〜+7: 開催済みで未送信のルームにシステムメッセージ送信 ---
-	const { results: endingSlots } = await env.umeyui_db
-		.prepare(
-			`SELECT s.id, s.date, cr.id AS room_id
+	try {
+		const { results: endingSlots } = await env.umeyui_db
+			.prepare(
+				`SELECT s.id, s.date, cr.id AS room_id
        FROM slots s
        JOIN chat_rooms cr ON cr.slot_id = s.id
        WHERE s.date > ? AND s.date < ? AND s.status = 'confirmed'
        AND NOT EXISTS (
          SELECT 1 FROM messages WHERE room_id = cr.id AND user_id = 'system'
        )`,
-		)
-		.bind(sevenDaysAgoJst, todayJst)
-		.all<{ id: string; date: string; room_id: string }>();
+			)
+			.bind(sevenDaysAgoJst, todayJst)
+			.all<{ id: string; date: string; room_id: string }>();
 
-	for (const slot of endingSlots) {
-		const deletionDate = new Date(slot.date + 'T00:00:00+09:00');
-		deletionDate.setDate(deletionDate.getDate() + 7);
-		const deletionLabel = `${deletionDate.getMonth() + 1}月${deletionDate.getDate()}日`;
-		const msgBody = `イベント開催ありがとうございました。このチャットルームは開催から7日後の${deletionLabel}に削除されます。`;
+		for (const slot of endingSlots) {
+			const deletionDate = new Date(slot.date + 'T00:00:00+09:00');
+			deletionDate.setDate(deletionDate.getDate() + 7);
+			const deletionLabel = `${deletionDate.getMonth() + 1}月${deletionDate.getDate()}日`;
+			const msgBody = `イベント開催ありがとうございました。このチャットルームは開催から7日後の${deletionLabel}に削除されます。`;
 
-		await env.umeyui_db
-			.prepare('INSERT INTO messages (id, room_id, user_id, body) VALUES (?, ?, ?, ?)')
-			.bind(crypto.randomUUID(), slot.room_id, 'system', msgBody)
-			.run();
+			await env.umeyui_db
+				.prepare('INSERT INTO messages (id, room_id, user_id, body) VALUES (?, ?, ?, ?)')
+				.bind(crypto.randomUUID(), slot.room_id, 'system', msgBody)
+				.run();
 
-		const { results: members } = await env.umeyui_db
-			.prepare("SELECT user_id FROM reservations WHERE slot_id = ? AND status = 'confirmed'")
-			.bind(slot.id)
-			.all<{ user_id: string }>();
+			const { results: members } = await env.umeyui_db
+				.prepare("SELECT user_id FROM reservations WHERE slot_id = ? AND status = 'confirmed'")
+				.bind(slot.id)
+				.all<{ user_id: string }>();
 
-		await Promise.all(
-			members.map((m) =>
-				sendPushToUser(env, m.user_id, 'チャットルーム', msgBody, { type: 'system_message', room_id: slot.room_id }),
-			),
-		);
+			await Promise.all(
+				members.map((m) =>
+					sendPushToUser(env, m.user_id, 'チャットルーム', msgBody, { type: 'system_message', room_id: slot.room_id }),
+				),
+			);
+		}
+	} catch (e) {
+		console.error('[scheduled] system message sending failed:', e);
 	}
 
 	// --- Day +8: チャットルーム削除（開催から7日以上経過かつルームが残っているもの） ---
-	const { results: expiredSlots } = await env.umeyui_db
-		.prepare(
-			`SELECT s.id AS slot_id, cr.id AS room_id
+	try {
+		const { results: expiredSlots } = await env.umeyui_db
+			.prepare(
+				`SELECT s.id AS slot_id, cr.id AS room_id
        FROM slots s
        JOIN chat_rooms cr ON cr.slot_id = s.id
        WHERE s.date <= ? AND s.status = 'confirmed'`,
-		)
-		.bind(sevenDaysAgoJst)
-		.all<{ slot_id: string; room_id: string }>();
+			)
+			.bind(sevenDaysAgoJst)
+			.all<{ slot_id: string; room_id: string }>();
 
-	for (const slot of expiredSlots) {
-		await env.umeyui_db.batch([
-			env.umeyui_db.prepare('DELETE FROM user_room_reads WHERE room_id = ?').bind(slot.room_id),
-			env.umeyui_db.prepare('DELETE FROM messages WHERE room_id = ?').bind(slot.room_id),
-			env.umeyui_db.prepare('DELETE FROM chat_rooms WHERE id = ?').bind(slot.room_id),
-		]);
+		for (const slot of expiredSlots) {
+			await env.umeyui_db.batch([
+				env.umeyui_db.prepare('DELETE FROM user_room_reads WHERE room_id = ?').bind(slot.room_id),
+				env.umeyui_db.prepare('DELETE FROM messages WHERE room_id = ?').bind(slot.room_id),
+				env.umeyui_db.prepare('DELETE FROM chat_rooms WHERE id = ?').bind(slot.room_id),
+			]);
+		}
+	} catch (e) {
+		console.error('[scheduled] chat room deletion failed:', e);
 	}
 }
 
