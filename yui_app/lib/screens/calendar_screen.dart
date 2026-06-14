@@ -5,6 +5,7 @@ import '../core/api_client.dart';
 import '../core/app_snackbar.dart';
 import '../core/auth_provider.dart';
 import '../models/slot.dart';
+import '../models/invitation.dart';
 import 'profile_screen.dart';
 
 String _fmtDeadline(DateTime dt) {
@@ -682,6 +683,14 @@ class _SlotCard extends StatelessWidget {
                       const SizedBox(width: 4),
                       _EditRecruitingButton(slot: slot, onSaved: onReserved),
                     ],
+                    // 発起人 + (募集中 or 確定後で空きあり) の場合に招待ボタン
+                    if (slot.vendors.any((v) => v.userId == myUserId && v.isInitiator) &&
+                        (slot.isRecruiting ||
+                            (slot.isConfirmed &&
+                                (slot.maxVendors == null || slot.currentCount < slot.maxVendors!)))) ...[
+                      const SizedBox(width: 4),
+                      _InviteButton(slot: slot, onInvited: onReserved),
+                    ],
                     // 管理者 + (募集前 or 発起人) の場合に削除ボタン
                     if (auth.isAdmin && (slot.isOpen || slot.vendors.any((v) => v.userId == myUserId && v.isInitiator))) ...[
                       const SizedBox(width: 4),
@@ -737,6 +746,222 @@ class _SlotCard extends StatelessWidget {
               ),
           ],
           ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---- 枠に招待ボタン（発起人のみ） ----
+
+class _InviteButton extends StatefulWidget {
+  final Slot slot;
+  final VoidCallback onInvited;
+  const _InviteButton({required this.slot, required this.onInvited});
+
+  @override
+  State<_InviteButton> createState() => _InviteButtonState();
+}
+
+class _InviteButtonState extends State<_InviteButton> {
+  bool _isLoading = false;
+
+  Future<void> _openInviteFlow() async {
+    setState(() => _isLoading = true);
+    List<InvitableUser> users;
+    try {
+      final raw = await apiClient.getInvitableUsers(widget.slot.id);
+      users = raw
+          .map((e) => InvitableUser.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } on ApiException catch (e) {
+      if (mounted) showAppSnackBar(context, e.message, isError: true);
+      return;
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+    if (!mounted) return;
+
+    // 1) ユーザー選択
+    final picked = await showModalBottomSheet<InvitableUser>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => _InviteePicker(users: users),
+    );
+    if (picked == null || !mounted) return;
+
+    // 2) 確認 + メッセージ入力（1枚に統合・誤招待防止）
+    //    キャンセル/破棄時は null、招待実行時はメッセージ文字列（空文字もあり）を返す
+    final msgCtrl = TextEditingController();
+    final message = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        title: const Text('招待の確認'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${picked.shopName ?? "この方"}さんを\n${widget.slot.date} の枠に招待します。',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: msgCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'メッセージ（任意）',
+                  hintText: 'ぜひ一緒に出店しませんか？',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, msgCtrl.text),
+            child: const Text('招待する'),
+          ),
+        ],
+      ),
+    );
+    if (message == null || !mounted) return; // キャンセル
+
+    // 4) 送信
+    try {
+      await apiClient.sendInvitation(
+        widget.slot.id,
+        inviteeId: picked.id,
+        message: message,
+      );
+      if (mounted) {
+        showAppSnackBar(context, '${picked.shopName ?? "相手"}さんに招待を送りました');
+        widget.onInvited();
+      }
+    } on ApiException catch (e) {
+      if (mounted) showAppSnackBar(context, e.message, isError: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: '枠に招待',
+      icon: _isLoading
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.person_add_alt_1, size: 18),
+      onPressed: _isLoading ? null : _openInviteFlow,
+    );
+  }
+}
+
+class _InviteePicker extends StatelessWidget {
+  final List<InvitableUser> users;
+  const _InviteePicker({required this.users});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ヘッダー（タイトル + 閉じる×）
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    '招待する人を選ぶ',
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ),
+                IconButton(
+                  tooltip: '閉じる',
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+          if (users.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Text('招待できる人がいません'),
+            )
+          else
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: users.length,
+                itemBuilder: (ctx, i) {
+                  final u = users[i];
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundImage: u.avatarUrl != null
+                          ? NetworkImage(resolveUrl(u.avatarUrl!))
+                          : null,
+                      child: u.avatarUrl == null
+                          ? Text((u.shopName ?? '?').substring(0, 1).toUpperCase())
+                          : null,
+                    ),
+                    title: Text(u.shopName ?? '名前未設定'),
+                    subtitle: u.category != null ? Text(u.category!) : null,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // プロフィールを覗く（行タップ＝招待選択とは別動作）
+                        IconButton(
+                          tooltip: 'プロフィールを見る',
+                          icon: const Icon(Icons.info_outline,
+                              size: 20, color: Colors.grey),
+                          onPressed: () => Navigator.push(
+                            ctx,
+                            MaterialPageRoute(
+                              builder: (_) => UserProfileScreen(userId: u.id),
+                            ),
+                          ),
+                        ),
+                        if (u.alreadyInvited)
+                          const Text('招待済み',
+                              style:
+                                  TextStyle(color: Colors.grey, fontSize: 12))
+                        else
+                          const Icon(Icons.chevron_right, color: Colors.grey),
+                      ],
+                    ),
+                    enabled: !u.alreadyInvited,
+                    onTap: u.alreadyInvited
+                        ? null
+                        : () => Navigator.pop(ctx, u),
+                  );
+                },
+              ),
+            ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('キャンセル'),
+              ),
+            ),
           ),
         ],
       ),

@@ -358,6 +358,48 @@ class ApiClient {
     });
   }
 
+  // ---- 招待API ----
+
+  // 発起人: 枠に招待できるユーザー一覧
+  Future<List<dynamic>> getInvitableUsers(String slotId) async {
+    return await get('/slots/$slotId/invitable-users') as List<dynamic>;
+  }
+
+  // 発起人: 招待を送る
+  Future<Map<String, dynamic>> sendInvitation(
+    String slotId, {
+    required String inviteeId,
+    String? message,
+  }) async {
+    return await post('/slots/$slotId/invitations', {
+      'invitee_id': inviteeId,
+      if (message != null && message.isNotEmpty) 'message': message,
+    });
+  }
+
+  // 受信した招待一覧（招待された側）
+  Future<List<dynamic>> getIncomingInvitations() async {
+    return await get('/invitations/incoming') as List<dynamic>;
+  }
+
+  // 送信した招待一覧（発起人）
+  Future<List<dynamic>> getOutgoingInvitations() async {
+    return await get('/invitations/outgoing') as List<dynamic>;
+  }
+
+  // 招待への返答（承認/辞退）
+  Future<void> respondToInvitation(
+    String invitationId, {
+    required String action, // 'accept' or 'decline'
+    String? responseMessage,
+  }) async {
+    await patch('/invitations/$invitationId', {
+      'action': action,
+      if (responseMessage != null && responseMessage.isNotEmpty)
+        'response_message': responseMessage,
+    });
+  }
+
   Future<void> registerPushToken(String userId, String token) async {
     await patch('/users/$userId/push-token', {'push_token': token});
   }

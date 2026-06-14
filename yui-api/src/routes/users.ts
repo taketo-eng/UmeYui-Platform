@@ -356,6 +356,7 @@ userRoutes.delete('/:id', async (c) => {
 				db.prepare("UPDATE reservations SET status = 'cancelled' WHERE slot_id = ? AND status != 'cancelled'").bind(res.slot_id),
 				db.prepare("UPDATE slots SET status = 'open', min_vendors = NULL, max_vendors = NULL WHERE id = ?").bind(res.slot_id),
 				db.prepare("UPDATE join_requests SET status = 'rejected' WHERE slot_id = ? AND status = 'pending'").bind(res.slot_id),
+				db.prepare("UPDATE invitations SET status = 'declined' WHERE slot_id = ? AND status = 'pending'").bind(res.slot_id),
 			];
 			if (chatRoom) {
 				batchOps.push(db.prepare('DELETE FROM messages WHERE room_id = ?').bind(chatRoom.id));
@@ -416,6 +417,7 @@ userRoutes.delete('/:id', async (c) => {
 	// FK制約なし（クリーンアップのみ）
 	await db.batch([
 		db.prepare('DELETE FROM join_requests WHERE requester_id = ?').bind(id),
+		db.prepare('DELETE FROM invitations WHERE inviter_id = ? OR invitee_id = ?').bind(id, id),
 		db.prepare('DELETE FROM notifications WHERE user_id = ?').bind(id),
 	]);
 

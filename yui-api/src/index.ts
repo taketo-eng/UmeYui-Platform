@@ -6,6 +6,7 @@ import { slotRoutes } from './routes/slots'
 import { reservationRoutes } from './routes/reservations'
 import { chatRoutes } from './routes/chat'
 import { slotJoinRequestRoutes, joinRequestRoutes } from './routes/join_requests'
+import { slotInvitationRoutes, invitationRoutes } from './routes/invitations'
 import { notificationRoutes } from './routes/notifications'
 import { publicRoutes } from './routes/public'
 import { sendPushToUser } from './lib/fcm'
@@ -19,6 +20,8 @@ app.route('/slots', slotRoutes)
 app.route('/slots', reservationRoutes)
 app.route('/slots', slotJoinRequestRoutes)
 app.route('/join-requests', joinRequestRoutes)
+app.route('/slots', slotInvitationRoutes)
+app.route('/invitations', invitationRoutes)
 app.route('/notifications', notificationRoutes)
 app.route('/chat-rooms', chatRoutes)
 app.route('/public', publicRoutes)
@@ -115,6 +118,7 @@ async function scheduledHandler(_event: ScheduledEvent, env: Env, _ctx: Executio
 
 			await env.umeyui_db.batch([
 				env.umeyui_db.prepare('DELETE FROM join_requests WHERE slot_id = ?').bind(slot.id),
+				env.umeyui_db.prepare('DELETE FROM invitations WHERE slot_id = ?').bind(slot.id),
 				env.umeyui_db.prepare('DELETE FROM notifications WHERE slot_id = ?').bind(slot.id),
 				env.umeyui_db.prepare('DELETE FROM reservations WHERE slot_id = ?').bind(slot.id),
 			]);
@@ -135,6 +139,7 @@ async function scheduledHandler(_event: ScheduledEvent, env: Env, _ctx: Executio
 			await env.umeyui_db.batch(
 				expiredOpenSlots.flatMap((s) => [
 					env.umeyui_db.prepare('DELETE FROM join_requests WHERE slot_id = ?').bind(s.id),
+					env.umeyui_db.prepare('DELETE FROM invitations WHERE slot_id = ?').bind(s.id),
 					env.umeyui_db.prepare('DELETE FROM notifications WHERE slot_id = ?').bind(s.id),
 					env.umeyui_db.prepare('DELETE FROM reservations WHERE slot_id = ?').bind(s.id),
 					env.umeyui_db.prepare('DELETE FROM slots WHERE id = ?').bind(s.id),

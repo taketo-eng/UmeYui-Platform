@@ -31,6 +31,9 @@ void setupNotificationHandlers(BuildContext context) {
 
 void _navigateFromNotification(BuildContext context, Map<String, dynamic> data) {
   switch (data['type']) {
+    case 'invitation_received':
+    case 'invitation_accepted':
+    case 'invitation_declined':
     case 'join_approved':
     case 'slot_confirmed':
       context.go('/home');
